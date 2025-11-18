@@ -383,7 +383,7 @@ fn get_pins(
     let in_left_gnd = pins.gpio27;
     let in_right_mode_gnd = pins.gpio28;
     let in_fire2_data_c_start = pins.gpio29;
-    return (
+    (
         selector,              // Selector
         pin_six_direction,     // I dunno
         soe,                   // Shifter's Output Enable
@@ -397,7 +397,7 @@ fn get_pins(
         in_fire2_data_c_start, // in_fire2_data_c_start
         pins.gpio16,
         fpo,
-    );
+    )
 }
 
 fn run_cd32_code<A: AnyPin, B: AnyPin>(
@@ -585,7 +585,7 @@ where
 
             // If we've got the chord for the coin button, get rid of the component buttons so they don't fire as well
             if (our_data & CD32_COIN_BITMASK) == 0 {
-                our_data = our_data | CD32_COIN_BITMASK;
+                our_data |= CD32_COIN_BITMASK;
             }
 
             pin_start
@@ -1055,7 +1055,7 @@ impl HiZPin {
     }
 
     fn is_high(&mut self) -> bool {
-        return self.pin.get_output_enable_override() == gpio::OutputEnableOverride::Disable;
+        self.pin.get_output_enable_override() == gpio::OutputEnableOverride::Disable
     }
 
     fn set_state(&mut self, desired_state: PinState) -> Result<(), gpio::Error> {
