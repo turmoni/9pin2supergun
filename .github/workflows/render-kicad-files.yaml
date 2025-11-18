@@ -25,10 +25,10 @@ jobs:
         with:
           name: Production files
           path: |
-            ${{ github.workspace }}/sch.pdf
-            ${{ github.workspace }}/gbr.zip
-            ${{ github.workspace }}/bom.csv
-            ${{ github.workspace }}/pcb.step
+            ${{ github.workspace }}/pcb/sch.pdf
+            ${{ github.workspace }}/pcb/gbr.zip
+            ${{ github.workspace }}/pcb/bom.csv
+            ${{ github.workspace }}/pcb/pcb.step
       - name: Download production files
         uses: actions/download-artifact@v4
         with:
