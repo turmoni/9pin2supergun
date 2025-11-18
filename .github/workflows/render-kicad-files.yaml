@@ -5,6 +5,8 @@ on:
       - "pcb/*.kicad_*"
 jobs:
   generate_files:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
@@ -34,7 +36,7 @@ jobs:
         with:
           name: Production files
           path: ${{github.workspace}}/pcb/rendered
-      - uses: stefanzweifel/git-auto-commit-action@v5
+      - uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: Render schematics and gerbers
           file_pattern: "pcb/rendered/*"
