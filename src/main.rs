@@ -42,7 +42,6 @@ type RgbLed = Ws2812<
     hal::timer::CountDown,
     Pin<DynPinId, gpio::FunctionPio1, PullDown>,
 >;
-//type ArbitraryInOutPin = InOutPin<Pin<DynPinId, Function>>;
 
 /// The linker will place this boot block at the start of our program image. We
 /// need this to help the ROM bootloader get our code up and running.
@@ -131,7 +130,6 @@ fn main() -> ! {
     if use_cd32 {
         let colour: RGB8 = (255, 0, 0).into();
         ws.write([colour].iter().copied()).unwrap();
-        debug!("Not implemented");
         let power: ArbitraryOutPin = in_power_select
             .into_function()
             .into_pull_type()
