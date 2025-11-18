@@ -1,0 +1,40 @@
+name: Render KiCad files
+on:
+  push:
+    paths:
+      - "pcb/*.kicad_*"
+jobs:
+  generate_files:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Render project
+        uses: sparkengineering/kicad-action@v4
+        id: production
+        with:
+          kicad_sch: pcb/9pin2supergun.kicad_sch
+          sch_pdf: true
+          sch_bom: true 
+          kicad_pcb: pcb/9pin2supergun.kicad_pcb
+          pcb_gerbers: true
+          pcb_model: true
+      - name: Upload production files
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.production.conclusion == 'success' }}
+        with:
+          name: Production files
+          path: |
+            ${{ github.workspace }}/sch.pdf
+            ${{ github.workspace }}/gbr.zip
+            ${{ github.workspace }}/bom.csv
+            ${{ github.workspace }}/pcb.step
+      - name: Download production files
+        uses: actions/download-artifact@v4
+        with:
+          name: Production files
+          path: ${{github.workspace}}/pcb/rendered
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Render schematics and gerbers
+          file_pattern: "pcb/rendered/*"
