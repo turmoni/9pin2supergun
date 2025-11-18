@@ -3,7 +3,7 @@ Code for a Pi Pico to read a CD32, Mega Drive/Genesis, or generic 9-pin gamepad 
 
 I am personally using this code with a [Monster Joysticks CD32 joystick](https://monsterjoysticks.com/deluxe-cd32-retro-joystick-kit-classic) and a [Minigun Supergun](https://www.arcade-projects.com/threads/minigun-supergun-an-open-source-supergun.9408/).
 
-There is a chance that there will be USB host support in the future, and this will be accommodated by the PCB I'm designing.
+There is a chance that there will be USB host support in the future, if using [the PCB](/pcb/).
 
 ## Requirements
 
@@ -15,11 +15,15 @@ There is a chance that there will be USB host support in the future, and this wi
 
 I went through quite a few headaches to get a level shifting setup that works in as generic a way as possible, so following what I've done will be the path of least resistance, just with some fairly fine pitched soldering. However, if you're not so worried about doing it Properly, there's probably little harm in playing around with those generic level shifter modules you get, and which I used during initial development of the CD32 side.
 
-## Setup
+## Hardware setup
 
-Wire this up as per the schematic:
+You have two options; either build the PCB, details of which are in the [pcb directory](/pcb/), or wire up a Pi Pico. The PCB is the most compact and solid option, but isn't a very beginner-friendly assembly, given its surface mount components, dense layout, and the fine pitch of the RP2040 package. Wiring up a Pico is more accessible, but bulkier.
+
+If you're using a Pico, wire this up as per the schematic:
 
 ![Schematic showing how to wire up the setup, a KiCad project will come later](/9pin2supergun.svg)
+
+## Component explanations
 
 The switch SW1 is used to select between CD32 and Mega Drive/Genesis mode; when tied to ground, it's Mega Drive mode, when floating, it's CD32 mode. When running with an attached RGB LED, it will indicate the mode it's running in (see Usage section for more details).
 
@@ -27,12 +31,11 @@ The button S1 is currently unused, and there for futureproofing.
 
 The level shifter U6 handles those inputs that are only ever inputs (pulled up to 5V). U7 handles both of the two outputs that can also be the +5V supply, and also the one remaining pin that's either an input or an output depending on whether it's in CD32 or Mega Drive mode.
 
-Build and install the firmware passing the `--features pi_pico` flag to `cargo` and you should now have a Neo Geo/Supergun-compatible output from your CD32, Mega Drive, or generic 9-pin controller.
-
-
 ## Building
 
 This is based on the [rp2040 project template](https://github.com/rp-rs/rp2040-project-template), have a look there for details. You need a `rust` build environment and the project will build with Cargo.
+
+If you're using a Pi Pico, rather than the PCB, pass the `--features pi_pico` flag to `cargo` when building to get the right pin assignments.
 
 ## Usage
 
