@@ -12,3 +12,7 @@ target/
 !.vscode/tasks.json
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# PCB files
+**/*.lck
+pcb/9pin2supergun-backups
