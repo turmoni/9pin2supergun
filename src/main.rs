@@ -52,13 +52,15 @@ type RgbLed = Ws2812<
 #[used]
 pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GENERIC_03H;
 
-// Turn a positive bitmask result into PinState::High and anything else into PinState::Low
-fn get_pin_state(result: u32) -> PinState {
-    PinState::from(result > 0)
-}
-
 // If using a generic two-button controller, map A+B to be start
 const MAP_GENERIC_AB_TO_START: bool = true;
+
+// What bitmask should we look for to let us send the coin button in CD32 mode?
+// The bits are as follows:
+// Pause, LB, RB, Green, Yellow, Red, Blue
+// Set to 0 to disable the feature.
+// Default: Pause + Green
+const CD32_COIN_BITMASK: u32 = 0b1001000;
 
 #[rp2040_hal::entry]
 fn main() -> ! {
@@ -574,7 +576,18 @@ where
         if rx_transfer.is_done() {
             let (rx_buf, next_rx_transfer) = rx_transfer.wait();
             // We only care about 7 bits of the 32 bits, make it a bit easier to deal with
-            let our_data = *rx_buf >> 25;
+            let mut our_data = *rx_buf >> 25;
+
+            // Set CD32_COIN_BITMASK to customise what this matches
+            pin_coin
+                .set_state(get_pin_state(our_data & CD32_COIN_BITMASK))
+                .unwrap();
+
+            // If we've got the chord for the coin button, get rid of the component buttons so they don't fire as well
+            if (our_data & CD32_COIN_BITMASK) == 0 {
+                our_data = our_data | CD32_COIN_BITMASK;
+            }
+
             pin_start
                 .set_state(get_pin_state(our_data & 0b1000000))
                 .unwrap();
@@ -596,21 +609,23 @@ where
             pin_b6
                 .set_state(get_pin_state(our_data & 0b0010000))
                 .unwrap();
+
             if our_data != 127 {
                 debug!("Got bits: {:#09b}", our_data);
                 debug!("            S361245");
-                // FIXME: Perhaps do this properly
-                //debug!(
-                //    "Buttons: 1 {} 2 {} 3 {} 4 {} 5 {} 6 {} start {}",
-                //    output_b1.is_high().unwrap(),
-                //    output_b2.is_high().unwrap(),
-                //    output_b3.is_high().unwrap(),
-                //    output_b4.is_high().unwrap(),
-                //    output_b5.is_high().unwrap(),
-                //    output_b6.is_high().unwrap(),
-                //    output_start.is_high().unwrap(),
-                //);
+                debug!(
+                    "Buttons: 1 {} 2 {} 3 {} 4 {} 5 {} 6 {} start {} coin {}",
+                    pin_b1.is_high(),
+                    pin_b2.is_high(),
+                    pin_b3.is_high(),
+                    pin_b4.is_high(),
+                    pin_b5.is_high(),
+                    pin_b6.is_high(),
+                    pin_start.is_high(),
+                    pin_coin.is_high(),
+                );
             }
+
             rx_transfer = next_rx_transfer.write_next(rx_buf);
 
             pin_up
@@ -627,12 +642,11 @@ where
                 .unwrap();
 
             debug!(
-                // FIXME: Base this on the output?
                 "Up: {}, Down: {}, Left: {}, Right: {}",
-                up.is_high().unwrap(),
-                down.is_high().unwrap(),
-                left.is_high().unwrap(),
-                right.is_high().unwrap()
+                pin_up.is_high(),
+                pin_down.is_high(),
+                pin_left.is_high(),
+                pin_right.is_high(),
             );
         }
     }
@@ -1040,6 +1054,10 @@ impl HiZPin {
         Self { pin }
     }
 
+    fn is_high(&mut self) -> bool {
+        return self.pin.get_output_enable_override() == gpio::OutputEnableOverride::Disable;
+    }
+
     fn set_state(&mut self, desired_state: PinState) -> Result<(), gpio::Error> {
         if desired_state == PinState::Low {
             self.pin
@@ -1051,6 +1069,11 @@ impl HiZPin {
             Ok(())
         }
     }
+}
+
+// Turn a positive bitmask result into PinState::High and anything else into PinState::Low
+fn get_pin_state(result: u32) -> PinState {
+    PinState::from(result > 0)
 }
 
 struct CD32Pins {

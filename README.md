@@ -21,17 +21,48 @@ Wire this up as per the schematic:
 
 ![Schematic showing how to wire up the setup, a KiCad project will come later](/9pin2supergun.svg)
 
-The switch SW1 is used to select between CD32 and Mega Drive/Genesis mode; when tied to ground, it's Mega Drive mode, when floating, it's CD32 mode.
+The switch SW1 is used to select between CD32 and Mega Drive/Genesis mode; when tied to ground, it's Mega Drive mode, when floating, it's CD32 mode. When running with an attached RGB LED, it will indicate the mode it's running in (see Usage section for more details).
 
-The button S1 and the LED D1 are currently unused, they will be set up once I have my PCB ready.
+The button S1 is currently unused, and there for futureproofing.
 
 The level shifter U6 handles those inputs that are only ever inputs (pulled up to 5V). U7 handles both of the two outputs that can also be the +5V supply, and also the one remaining pin that's either an input or an output depending on whether it's in CD32 or Mega Drive mode.
 
-Build and install the firmware as of [the "pi_pico_pins" tag](https://github.com/turmoni/9pin2supergun/releases/tag/pi_pico_pins) and you should now have a Neo Geo/Supergun-compatible output from your CD32, Mega Drive, or generic 9-pin controller. By default, pressing both buttons on a two-button controller will send START too, to disable this behaviour, change MAP_GENERIC_AB_TO_START to false.
+Build and install the firmware passing the `--features pi_pico` flag to `cargo` and you should now have a Neo Geo/Supergun-compatible output from your CD32, Mega Drive, or generic 9-pin controller.
+
 
 ## Building
 
 This is based on the [rp2040 project template](https://github.com/rp-rs/rp2040-project-template), have a look there for details. You need a `rust` build environment and the project will build with Cargo.
+
+## Usage
+
+This is pretty much a case of setting the switch to the right position, plugging it in, and going! If you've fitted the LED, it will tell you which mode you're in:
+* Red: Amiga CD32 mode
+* Blue: Mega Drive/generic mode
+* Yellow: Mega Drive/generic mode with the buttons swapped
+
+The button mapping is as follows:
+
+| Output | CD32[^3]  | Mega Drive/Genesis (6- or 3-button) | Generic 9-pin |
+| ------ | --------  | ----------------------------------- | ------------- |
+| Up     | Up        | Up                                  | Up            |
+| Down   | Down      | Down                                | Down          |
+| Left   | Left      | Left                                | Left          |
+| Right  | Right     | Right                               | Right         |
+| 1      | G         | A                                   | 1             |
+| 2      | Y         | B                                   | 2             |
+| 3      | LS        | C                                   | N/A           |
+| 4      | R         | X                                   | N/A           |
+| 5      | B         | Y                                   | N/A           |
+| 6      | RS        | Z                                   | N/A           |
+| Start  | Pause     | Start                               | 1 + 2         |
+| Coin   | Pause + G | Mode                                | N/A           |
+
+Of course, X, Y, Z, and Mode aren't present on a 3-button Mega Drive controller, so these buttons aren't available there.
+
+Since the Mega Drive layout may be the opposite of what's wanted, you can press and hold mode for three seconds to swap ABC and XYZ.
+
+If you don't want the 1+2 mapping for generic 9-pin controllers, set `MAP_GENERIC_AB_TO_START` to false and rebuild the code. If you don't want the Pause + Green mapping for CD32 controllers, or want it to be a different button combination, change `CD32_COIN_BITMASK` (there are comments in the code to explain its format). Since these are pretty niche, I'm not sure figuring out a runtime configuration option is worth it.
 
 ## Anything else
 
@@ -47,3 +78,4 @@ Thanks to [Mathew Carr's PSCD32 Development Diary](https://www.mrdictionary.net/
 
 [^1]: Literally everyone seems to call this a DB15 connector, but it is actually DA15.
 [^2]: Annoyingly, they use different pinouts, with +5V being on a different pin
+[^3]: Single-letter CD32 buttons refer to the colour, LB and RB are the shoulder buttons
