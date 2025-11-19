@@ -250,6 +250,7 @@ fn main() -> ! {
     }
 }
 
+#[allow(clippy::type_complexity)]
 #[cfg(feature = "pi_pico")]
 fn get_pins(
     pins: gpio::Pins,
@@ -308,7 +309,7 @@ fn get_pins(
     let in_left_gnd = pins.gpio20; // Pin 3
     let in_right_mode_gnd = pins.gpio21; // Pin 4
     let in_fire2_data_c_start = pins.gpio22; // Pin 9
-    return (
+    (
         selector,              // Selector
         pin_six_direction,     // I dunno
         soe,                   // Shifter's Output Enable
@@ -322,7 +323,7 @@ fn get_pins(
         in_fire2_data_c_start, // in_fire2_data_c_start
         pins.gpio0,
         fpo,
-    );
+    )
 }
 
 #[allow(clippy::type_complexity)]
