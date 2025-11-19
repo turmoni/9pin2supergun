@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         # All generated code should be running on stable now
-        rust: stable
+        rust: [ stable ]
         os:
           - ubuntu-latest
     runs-on: ${{ matrix.os }}
