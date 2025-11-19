@@ -311,7 +311,7 @@ fn get_pins(
     let in_fire2_data_c_start = pins.gpio22; // Pin 9
     (
         selector,              // Selector
-        pin_six_direction,     // I dunno
+        pin_six_direction,     // Whether pin 6 on a level shifter is in or out
         soe,                   // Shifter's Output Enable
         in_latch_power,        // in_latch_power
         in_power_select,       // in_power_select
@@ -385,7 +385,7 @@ fn get_pins(
     let in_fire2_data_c_start = pins.gpio29;
     (
         selector,              // Selector
-        pin_six_direction,     // I dunno
+        pin_six_direction,     // Whether pin 6 on a level shifter is in or out
         soe,                   // Shifter's Output Enable
         in_latch_power,        // in_latch_power
         in_power_select,       // in_power_select
