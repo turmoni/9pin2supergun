@@ -325,6 +325,7 @@ fn get_pins(
     );
 }
 
+#[allow(clippy::type_complexity)]
 #[cfg(not(feature = "pi_pico"))]
 fn get_pins(
     pins: gpio::Pins,
@@ -398,6 +399,9 @@ fn get_pins(
     )
 }
 
+// I'm just going to disable these clippy warnings where working around it
+// feels like it would be arbitrary
+#[allow(clippy::too_many_arguments)]
 fn run_cd32_code<A: AnyPin, B: AnyPin>(
     cpu_freq: u32,
     pin_six_direction: A,
@@ -425,6 +429,7 @@ where
     );
 }
 
+#[allow(clippy::type_complexity)]
 fn setup_state_machine_cd32(
     cpu_freq: u32,
     pio: pac::PIO0,
@@ -506,6 +511,7 @@ fn setup_state_machine_cd32(
     (sm, rx, cd32_pins)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn read_cd32_loop<A: AnyPin, B: AnyPin>(
     pin_six_direction: A,
     shifter_oe: B,
@@ -650,6 +656,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_md_code<A: AnyPin, B: AnyPin>(
     cpu_freq: u32,
     pin_six_direction: A,
@@ -682,6 +689,7 @@ where
     );
 }
 
+#[allow(clippy::type_complexity)]
 fn setup_state_machine_md(
     cpu_freq: u32,
     pio: pac::PIO0,
@@ -762,6 +770,7 @@ fn setup_state_machine_md(
     (sm, rx, md_pins)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn read_md_loop<A: AnyPin, B: AnyPin>(
     pin_six_direction: A,
     shifter_oe: B,
