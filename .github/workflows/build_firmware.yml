@@ -25,6 +25,8 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           target: thumbv6m-none-eabi
+      - run: sudo apt update
+      - run: sudo apt -y install libudev-dev
       - run: cargo install flip-link
       - run: cargo install elf2uf2-rs
       - run: cargo build --release
