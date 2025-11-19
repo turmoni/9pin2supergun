@@ -4816,7 +4816,7 @@
 		(uuid "d1bb319e-0ede-48df-b79d-4deb5b26aea6")
 	)
 	(junction
-		(at 146.05 44.45)
+		(at 143.51 44.45)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "085bf55b-45c4-4131-935f-e9a3ac7fad6e")
@@ -5137,7 +5137,7 @@
 	)
 	(wire
 		(pts
-			(xy 146.05 44.45) (xy 168.91 44.45)
+			(xy 143.51 44.45) (xy 168.91 44.45)
 		)
 		(stroke
 			(width 0)
@@ -5267,7 +5267,7 @@
 	)
 	(wire
 		(pts
-			(xy 41.91 163.83) (xy 54.61 163.83)
+			(xy 35.56 163.83) (xy 54.61 163.83)
 		)
 		(stroke
 			(width 0)
@@ -5325,56 +5325,6 @@
 		)
 		(uuid "fe3b9554-af2e-44ea-841c-2c7a074d4d59")
 	)
-	(label "Left"
-		(at 243.84 105.41 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "06ac3a66-c62e-4185-81a4-99a6dc51db27")
-	)
-	(label "3.3v Latch{slash}Power"
-		(at 54.61 176.53 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "0a122022-5e2d-4049-840e-781ed3fce8e5")
-	)
-	(label "Button 6"
-		(at 243.84 128.27 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "0cd8813f-a8a3-4e63-a822-868719e2bfbd")
-	)
-	(label "Button 2"
-		(at 243.84 113.03 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "10233b21-5072-42eb-b649-7a22ed716cc7")
-	)
-	(label "Right"
-		(at 243.84 107.95 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "13675126-8f22-4cd3-b401-fde94c0cffdb")
-	)
 	(label "5v Right{slash}Mode{slash}GND"
 		(at 76.2 96.52 0)
 		(effects
@@ -5384,36 +5334,6 @@
 			(justify left bottom)
 		)
 		(uuid "16172dbe-f86c-4b05-a4d0-13d84c80c2aa")
-	)
-	(label "Start"
-		(at 243.84 120.65 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "1e1d6cce-1612-428b-9b75-3adf869ff5a6")
-	)
-	(label "3.3v Power{slash}Select"
-		(at 54.61 173.99 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "2492027b-a549-45c4-8b33-2f1d03727f71")
-	)
-	(label "3.3v Down{slash}Y"
-		(at 55.88 106.68 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "2a7c1823-f45d-4b05-aa9d-1b4484b45ce1")
 	)
 	(label "5v Latch{slash}Power"
 		(at 186.69 110.49 180)
@@ -5435,46 +5355,6 @@
 		)
 		(uuid "3b538bad-1c5a-4742-a9d4-a096404f4c5c")
 	)
-	(label "3.3v Fire 2{slash}Data{slash}C{slash}Start"
-		(at 55.88 91.44 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "4653032e-f799-4722-ba6d-088dd2c1602d")
-	)
-	(label "Button 3"
-		(at 243.84 115.57 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "4a1bf02c-245c-4026-9c19-1fd376baa53c")
-	)
-	(label "~{OE}"
-		(at 38.1 132.08 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "4c4b8829-c81d-4a0e-a29f-52cd47b6e5db")
-	)
-	(label "3.3v Up{slash}Z"
-		(at 55.88 111.76 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "5d245ff8-1157-4f58-b11b-8f5b1cff4dea")
-	)
 	(label "5v Down{slash}Y"
 		(at 152.4 125.73 180)
 		(effects
@@ -5485,26 +5365,6 @@
 		)
 		(uuid "694beaec-be07-4816-baa4-8ea9d09fa17c")
 	)
-	(label "LED control"
-		(at 160.02 54.61 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "6ba69334-c78c-4a54-9ef1-c4cb98f92cb6")
-	)
-	(label "Mode switch"
-		(at 57.15 52.07 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "7160d3b9-a849-4088-a2c1-ab2a21dc2520")
-	)
 	(label "5v Fire 1{slash}Clock{slash}B{slash}A"
 		(at 80.01 168.91 0)
 		(effects
@@ -5514,16 +5374,6 @@
 			(justify left bottom)
 		)
 		(uuid "7d5b3d12-b42f-42c7-97ee-b8d86f9968ab")
-	)
-	(label "3.3v Left{slash}X{slash}GND"
-		(at 55.88 101.6 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "89436bd4-6244-4d16-bdbf-577e3a772c5e")
 	)
 	(label "5v Left{slash}X{slash}GND"
 		(at 76.2 101.6 0)
@@ -5545,16 +5395,6 @@
 		)
 		(uuid "9aaf7f80-8660-447a-8ec9-a8c4a2562972")
 	)
-	(label "Pin 6 Dir"
-		(at 54.61 161.29 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "a2e23833-4bf8-420a-870a-4a2fa440a36b")
-	)
 	(label "5v Fire 2{slash}Data{slash}C{slash}Start"
 		(at 152.4 113.03 180)
 		(effects
@@ -5564,36 +5404,6 @@
 			(justify right bottom)
 		)
 		(uuid "a549ba04-dfc2-4ede-bfaf-711d68a7c3c2")
-	)
-	(label "Down"
-		(at 243.84 102.87 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "a6efb331-41e3-45f1-b7a3-318054e4c61a")
-	)
-	(label "Button 5"
-		(at 243.84 125.73 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "aad050d2-5bef-44ba-b962-53ecd3568560")
-	)
-	(label "Coin"
-		(at 243.84 123.19 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "aaea726d-4425-4aee-93c9-fff59c07ed42")
 	)
 	(label "5v Fire 1{slash}Clock{slash}B{slash}A"
 		(at 152.4 128.27 180)
@@ -5605,16 +5415,6 @@
 		)
 		(uuid "ac725fb9-be5e-48c5-b07e-effdd116bce7")
 	)
-	(label "Button 1"
-		(at 243.84 110.49 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "be2fc863-6d47-43d9-a730-4277b0923783")
-	)
 	(label "5v Latch{slash}Power"
 		(at 80.01 176.53 0)
 		(effects
@@ -5624,16 +5424,6 @@
 			(justify left bottom)
 		)
 		(uuid "c7e729a2-4766-4071-bd7e-eec83a18d8a6")
-	)
-	(label "Up"
-		(at 243.84 100.33 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "c8afc154-f63a-43e4-9e6f-5e857783e9e7")
 	)
 	(label "5v Up{slash}Z"
 		(at 76.2 111.76 0)
@@ -5665,16 +5455,6 @@
 		)
 		(uuid "df3a546c-4f61-49dd-8731-4013a675f01b")
 	)
-	(label "3.3v Fire 1{slash}Clock{slash}B{slash}A"
-		(at 54.61 168.91 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "e067e9c3-25cc-4036-a590-21dac224c61d")
-	)
 	(label "5v Right{slash}Mode{slash}GND"
 		(at 152.4 115.57 180)
 		(effects
@@ -5705,39 +5485,284 @@
 		)
 		(uuid "ebbb267d-2df2-4bc4-b859-ba04efeb6474")
 	)
-	(label "Button"
-		(at 87.63 46.99 0)
+	(hierarchical_label "3.3v Fire 2{slash}Data{slash}C{slash}Start"
+		(shape output)
+		(at 55.88 91.44 180)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify right)
 		)
-		(uuid "f822140b-0cdf-4e6f-a4d8-9307c31b7444")
+		(uuid "05445a73-0966-4570-a6f4-e4e78cf8d6b2")
 	)
-	(label "Button 4"
+	(hierarchical_label "3.3v Fire 1{slash}Clock{slash}B{slash}A"
+		(shape bidirectional)
+		(at 54.61 168.91 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "098d6d7a-c73f-4863-a822-ba19a46e6499")
+	)
+	(hierarchical_label "Button 4"
+		(shape tri_state)
 		(at 243.84 118.11 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify left)
 		)
-		(uuid "fad12824-b5eb-458b-8639-fea671fbb532")
+		(uuid "137c1596-a9be-41cf-b15a-e629625a48a0")
 	)
-	(label "3.3v Right{slash}Mode{slash}GND"
+	(hierarchical_label "Button 5"
+		(shape tri_state)
+		(at 243.84 125.73 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "3ae2a87f-3693-42b0-b0a1-5b20a33831b4")
+	)
+	(hierarchical_label "Right"
+		(shape tri_state)
+		(at 243.84 107.95 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "3d8716d2-5558-4bdb-a6b3-2748799cf124")
+	)
+	(hierarchical_label "~{OE}"
+		(shape input)
+		(at 38.1 132.08 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "3da9674b-b242-478d-87c6-55a526c35c1e")
+	)
+	(hierarchical_label "Button 3"
+		(shape tri_state)
+		(at 243.84 115.57 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "46c8c3ce-c7dc-42b7-b69f-d2dcf1a06fdc")
+	)
+	(hierarchical_label "Up"
+		(shape tri_state)
+		(at 243.84 100.33 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "4ed2f6c9-3f86-4c61-8435-09876a517df5")
+	)
+	(hierarchical_label "3.3v Up{slash}Z"
+		(shape output)
+		(at 55.88 111.76 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "5714d33d-cc28-4cbe-b320-afb2f0ad2cd2")
+	)
+	(hierarchical_label "Button 2"
+		(shape tri_state)
+		(at 243.84 113.03 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "5895bb1c-156a-4a92-a2ea-0ca1c49bc019")
+	)
+	(hierarchical_label "3.3v Right{slash}Mode{slash}GND"
+		(shape output)
 		(at 55.88 96.52 180)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify right bottom)
+			(justify right)
 		)
-		(uuid "fe363542-9e82-4da7-bd64-056a9f44f394")
+		(uuid "5ce7694b-903f-4a8a-8d62-1eb490c6b6a0")
+	)
+	(hierarchical_label "Mode switch"
+		(shape output)
+		(at 57.15 52.07 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "6b6eccd2-3cfb-40a6-abed-9080223aa498")
+	)
+	(hierarchical_label "Button 6"
+		(shape tri_state)
+		(at 243.84 128.27 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "6d2320b2-ed59-4ad0-a962-de13815e04c1")
+	)
+	(hierarchical_label "Start"
+		(shape tri_state)
+		(at 243.84 120.65 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "8e00d85d-1bde-4a47-bf7a-69488bd9b6ee")
+	)
+	(hierarchical_label "3.3v Latch{slash}Power"
+		(shape input)
+		(at 54.61 176.53 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "990da449-b14b-4971-80a9-f8ac3f402172")
+	)
+	(hierarchical_label "Coin"
+		(shape tri_state)
+		(at 243.84 123.19 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "99880cba-895a-4792-b442-859f974b4c6c")
+	)
+	(hierarchical_label "LED Control"
+		(shape input)
+		(at 160.02 54.61 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "9d1822a0-c626-4053-a0bd-7b619ddeda7a")
+	)
+	(hierarchical_label "Button 1"
+		(shape tri_state)
+		(at 243.84 110.49 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "b0fcc48c-b216-4476-9708-c3d6f8b3a0e2")
+	)
+	(hierarchical_label "3.3v Power{slash}Select"
+		(shape input)
+		(at 54.61 173.99 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "bdee1543-e921-4b96-a620-3c628a9bb388")
+	)
+	(hierarchical_label "Button"
+		(shape output)
+		(at 87.63 46.99 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "caa1595f-eb10-419f-a275-0faeb9f8f1d0")
+	)
+	(hierarchical_label "Down"
+		(shape tri_state)
+		(at 243.84 102.87 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "db2f076d-dae4-4971-ac7b-a33e2fd16ac8")
+	)
+	(hierarchical_label "3.3v Left{slash}X{slash}GND"
+		(shape output)
+		(at 55.88 101.6 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "e64e59f5-568a-4ef8-93dc-e191d06ac183")
+	)
+	(hierarchical_label "3.3v Down{slash}Y"
+		(shape output)
+		(at 55.88 106.68 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "ec94802a-b8c1-4148-b69e-4a08bb246034")
+	)
+	(hierarchical_label "Left"
+		(shape tri_state)
+		(at 243.84 105.41 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "f4fc2178-42be-44c0-8507-3e3d6721074d")
+	)
+	(hierarchical_label "Pin 6 direction"
+		(shape input)
+		(at 54.61 161.29 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "fd4aa8fa-12e6-48fe-a72a-fbf20672cda0")
 	)
 	(symbol
 		(lib_id "power:+3.3V")
-		(at 146.05 44.45 0)
+		(at 143.51 44.45 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -5746,7 +5771,7 @@
 		(fields_autoplaced yes)
 		(uuid "09f6dfd2-6a14-4983-8587-da2976aac42e")
 		(property "Reference" "#PWR0104"
-			(at 146.05 48.26 0)
+			(at 143.51 48.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5755,7 +5780,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 146.05 39.37 0)
+			(at 143.51 39.37 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5763,7 +5788,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 146.05 44.45 0)
+			(at 143.51 44.45 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5772,7 +5797,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 146.05 44.45 0)
+			(at 143.51 44.45 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5781,7 +5806,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 146.05 44.45 0)
+			(at 143.51 44.45 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7003,7 +7028,7 @@
 		(dnp no)
 		(fields_autoplaced yes)
 		(uuid "980f3bcc-a0c0-4a87-87f3-7432160ece9b")
-		(property "Reference" "SW1"
+		(property "Reference" "S2"
 			(at 41.91 41.91 0)
 			(effects
 				(font
@@ -7060,7 +7085,7 @@
 		(instances
 			(project "9pin2supergun"
 				(path "/21afbdb1-ba68-4161-b9c3-681f84b8fb58/194a102d-51c5-4fc2-a534-d36f0ce914d9"
-					(reference "SW1")
+					(reference "S2")
 					(unit 1)
 				)
 			)
@@ -7599,7 +7624,7 @@
 	)
 	(symbol
 		(lib_id "power:+3.3V")
-		(at 41.91 163.83 0)
+		(at 35.56 163.83 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -7608,7 +7633,7 @@
 		(fields_autoplaced yes)
 		(uuid "b19cd21c-14c0-48a1-acce-f09c928acb11")
 		(property "Reference" "#PWR033"
-			(at 41.91 167.64 0)
+			(at 35.56 167.64 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7617,7 +7642,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 41.91 158.75 0)
+			(at 35.56 158.75 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7625,7 +7650,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 41.91 163.83 0)
+			(at 35.56 163.83 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7634,7 +7659,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 41.91 163.83 0)
+			(at 35.56 163.83 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7643,7 +7668,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 41.91 163.83 0)
+			(at 35.56 163.83 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7798,7 +7823,7 @@
 	)
 	(symbol
 		(lib_id "Device:C")
-		(at 146.05 48.26 0)
+		(at 143.51 48.26 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -7807,7 +7832,7 @@
 		(fields_autoplaced yes)
 		(uuid "c7799dbe-1672-47c2-8cf1-951b316f4b66")
 		(property "Reference" "C50"
-			(at 149.86 46.9899 0)
+			(at 147.32 46.9899 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7815,8 +7840,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "0.1uF"
-			(at 149.86 49.5299 0)
+		(property "Value" "100n"
+			(at 147.32 49.5299 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7825,7 +7850,7 @@
 			)
 		)
 		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric_Pad1.18x1.45mm_HandSolder"
-			(at 147.0152 52.07 0)
+			(at 144.4752 52.07 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7834,7 +7859,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 146.05 48.26 0)
+			(at 143.51 48.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7843,7 +7868,7 @@
 			)
 		)
 		(property "Description" "Unpolarized capacitor"
-			(at 146.05 48.26 0)
+			(at 143.51 48.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7934,7 +7959,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 146.05 52.07 0)
+		(at 143.51 52.07 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -7943,7 +7968,7 @@
 		(fields_autoplaced yes)
 		(uuid "e9cecbcc-e32b-49f5-b683-cae8e0ffccea")
 		(property "Reference" "#PWR0105"
-			(at 146.05 58.42 0)
+			(at 143.51 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7952,7 +7977,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 146.05 57.15 0)
+			(at 143.51 57.15 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7960,7 +7985,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 146.05 52.07 0)
+			(at 143.51 52.07 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7969,7 +7994,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 146.05 52.07 0)
+			(at 143.51 52.07 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7978,7 +8003,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 146.05 52.07 0)
+			(at 143.51 52.07 0)
 			(effects
 				(font
 					(size 1.27 1.27)
