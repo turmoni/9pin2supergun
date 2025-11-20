@@ -3,9 +3,6 @@ on:
   push:
     paths:
       - "pcb/*.kicad_*"
-    # There are no tagged releases of the PCB
-    tags-ignore:
-      - "*"
 jobs:
   generate_files:
     permissions:
