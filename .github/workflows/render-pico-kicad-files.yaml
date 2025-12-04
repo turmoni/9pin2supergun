@@ -18,7 +18,7 @@ jobs:
           kicad_sch: pico_reference/9pin2supergun.kicad_sch
           sch_pdf: true
           sch_bom: true 
-          kicad_pcb: pico_reference/9pin2supergun.kicad_pico_reference
+          kicad_pcb: pico_reference/9pin2supergun.kicad_pcb
           pcb_gerbers: true
           pcb_image: true
       - name: Upload production files
