@@ -1,4 +1,4 @@
-name: Render KiCad files
+name: Render KiCad files (PCB)
 on:
   push:
     paths:
@@ -25,7 +25,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() && steps.production.conclusion == 'success' }}
         with:
-          name: Production files
+          name: pcb-rendered
           path: |
             ${{ github.workspace }}/pcb/sch.pdf
             ${{ github.workspace }}/pcb/gbr.zip
@@ -35,7 +35,7 @@ jobs:
       - name: Download production files
         uses: actions/download-artifact@v4
         with:
-          name: Production files
+          name: pcb-rendered
           path: ${{github.workspace}}/pcb/rendered
       - uses: stefanzweifel/git-auto-commit-action@v7
         with:
