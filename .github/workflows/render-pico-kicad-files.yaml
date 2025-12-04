@@ -1,4 +1,4 @@
-name: Render KiCad files (PCB)
+name: Render KiCad files (Pico reference)
 on:
   push:
     paths:
@@ -18,9 +18,9 @@ jobs:
           kicad_sch: pico_reference/9pin2supergun.kicad_sch
           sch_pdf: true
           sch_bom: true 
-          kicad_pico_reference: pico_reference/9pin2supergun.kicad_pico_reference
-          pico_reference_gerbers: true
-          pico_reference_image: true
+          kicad_pcb: pico_reference/9pin2supergun.kicad_pico_reference
+          pcb_gerbers: true
+          pcb_image: true
       - name: Upload production files
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() && steps.production.conclusion == 'success' }}
