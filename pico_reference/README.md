@@ -23,12 +23,12 @@ For convenience each push gets rendered to [the `rendered` directory](rendered/)
 # Components and their explanations
 
 If you're going to use your own components, the key things are:
- * U1 - this is a level shifter/buffer for shifting between 3.3V and 5V. It has two sets of two shifters within it. For our purposes, two of these are set to always be outputs, and one changes between being an input or output. If you are only going to use one controller type, you can hard wire the power line and then either only need two outputs (CD32) or one output and an input that could be rolled into U2 (Mega Drive)
- * U2 - this is just level shifting the input from the controller down to 3.3V. If you want to try out the Pico's 5V tolerance, you can omit this and RN1 if you want. Often the inputs will be either floating or GND, and so safe anyway, but I wouldn't totally rely on this being the case
- * RN1 - pulling up the inputs from the controller port. Omit it if you're also omitting the level shifters
- * SW1 - the mode switch. Switches between Mega Drive (floating) and CD32 (tied to GND) modes. You can hardcode this if you're only using one type of controller
- * SW2 - not actually used, but might be helpful in the future
- * D1 - indicates what mode you're in (including if the button rows are flipped in Mega Drive mode). Omit this if you don't care.
+ * U1 ([SN74AVC4T245PW](https://www.ti.com/product/SN74AVC4T245)) - this is a level shifter/buffer for shifting between 3.3V and 5V. It has two sets of two shifters within it. For our purposes, two of these are set to always be outputs, and one changes between being an input or output. If you are only going to use one controller type, you can hard wire the power line and then either only need two outputs (CD32) or one output and an input that could be rolled into U2 (Mega Drive)
+ * U2 ([SN74LVC8T245](https://www.ti.com/product/SN74LVC8T245)) - this is just level shifting the input from the controller down to 3.3V. If you want to try out the Pico's 5V tolerance, you can omit this and RN1 if you want. Often the inputs will be either floating or GND, and so safe anyway, but I wouldn't totally rely on this being the case
+ * RN1 (10k resistor network) - pulling up the inputs from the controller port. Omit it if you're also omitting the level shifters
+ * SW1 (SPDT switch) - the mode switch. Switches between Mega Drive (floating) and CD32 (tied to GND) modes. You can hardcode this if you're only using one type of controller
+ * SW2 (standard push button) - not actually used, but might be helpful in the future
+ * D1 (WS2812B LED) - indicates what mode you're in (including if the button rows are flipped in Mega Drive mode). Omit this if you don't care.
 
 ## More on level shifting
 
