@@ -1,5 +1,5 @@
 # 9pin2supergun
-Code for a Pi Pico to read a CD32, Mega Drive/Genesis, or generic 9-pin gamepad and output each control to a separate pin for use with Neo Geos and/or Superguns.
+A project to read a CD32, Mega Drive/Genesis, or generic 9-pin gamepad and output each control to a separate pin for use with Neo Geos and/or Superguns.
 
 I am personally using this code with a [Monster Joysticks CD32 joystick](https://monsterjoysticks.com/deluxe-cd32-retro-joystick-kit-classic) and a [Minigun Supergun](https://www.arcade-projects.com/threads/minigun-supergun-an-open-source-supergun.9408/).
 
