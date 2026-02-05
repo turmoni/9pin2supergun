@@ -6,8 +6,8 @@
 	(paper "A4")
 	(title_block
 		(title "9pin2supergun")
-		(date "2025-11-18")
-		(rev "1.0")
+		(date "2026-02-05")
+		(rev "1.1")
 		(company "Dave Wickham")
 	)
 	(lib_symbols
