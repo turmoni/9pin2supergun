@@ -18,6 +18,6 @@ When assembling, note that R2 is marked as DNF - if you're using the specified f
 
 ## Things to note
 
-You can't power this with a USB Type C to Type C cable. This is a deliberate trade-off I put in place to allow for the potential to also support USB controllers without having to include a whole power negotiation chip, and not just ignorance or laziness. This wouldn't be good enough for a commercial product, but it's fine for me.
+SW1 switches between presenting itself as a USB device or a USB host, based on the resistors on the CC pins. This doesn't change anything with the software, and any cables other than Type C to Type C will be entirely unimpacted by this. Set it to Device (up) if you want to plug it into your PC, and Host (down) if you want to plug a gamepad into it. Since there's no code at the moment that uses host mode, it's safe to leave or hardcode it as a device for the moment (connect the middle pins of the switch to their respective top pins, and populate R9 and R10).
 
 Do not power the board from more than one place, e.g. don't plug it into a supergun *and* a USB power source.
