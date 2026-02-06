@@ -12,7 +12,7 @@ Unlike the related [Neo Geo Controller Tester](https://github.com/turmoni/neogeo
 
 The [BOM CSV](/pcb/rendered/bom.csv) has the list of parts, but I don't know how useful that is for importing elsewhere. I have [a DigiKey list](https://www.digikey.co.uk/en/mylists/list/U1CG00OTBV) that contains all the components that are needed, although at the time of writing, some of them are not available to order.
 
-You may be able to get this fully/partially assembled from your PCB manufacturer - I didn't do this, so I can't comment, but there are only a few unusual components to manually spec and they are at least in LCSC (JLCPCB)'s database.
+You may be able to get this fully/partially assembled from your PCB manufacturer - I didn't do this, so I can't comment, but there are only a few unusual components to manually spec and they are at least in LCSC (JLCPCB)'s database. If I end up doing this, I will probably replace U6 with more of the same type of shifter as U4 and U5 for cost reasons (one less reel to load).
 
 When assembling, note that R2 is marked as DNF - if you're using the specified flash module, you shouldn't need to fit a resistor there. See [Hardware Design with RP2040](https://datasheets.raspberrypi.com/rp2040/hardware-design-with-rp2040.pdf) (PDF) for more information on this, since most of the support circuitry is adapted from that reference design.
 
