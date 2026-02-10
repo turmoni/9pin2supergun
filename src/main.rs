@@ -1,55 +1,23 @@
-//! Reads a CD32 gamepad and breaks it out into 7 individual active-low GPIO pins
+//! Reads a CD32 or Mega Drive gamepad and breaks it out into 7 individual active-low GPIO pins
 #![no_std]
 #![no_main]
 
-use cortex_m::singleton;
 use defmt::*;
 use defmt_rtt as _;
+use embassy_executor::Spawner;
+use embassy_rp::bind_interrupts;
+use embassy_rp::clocks::clk_sys_freq;
+use embassy_rp::gpio::{Input, Level, Output, OutputOpenDrain, Pull};
+use embassy_rp::peripherals::PIO0;
+use embassy_rp::pio::program::pio_asm;
+use embassy_rp::pio::{Direction as PioDirection, InterruptHandler, Pio, StateMachine};
+use embassy_rp::pio_programs::ws2812::{PioWs2812, PioWs2812Program};
+use embassy_rp::{Peri, Peripherals};
+use embassy_time::Instant;
+use fixed::traits::ToFixed;
 use panic_probe as _;
-use rp2040_hal::{self as hal, gpio::Pin};
 
-use hal::{
-    clocks::{init_clocks_and_plls, Clock},
-    dma::{double_buffer, DMAExt},
-    gpio,
-    gpio::bank0,
-    gpio::{
-        AnyPin, DynPinId, DynPullType, FunctionPio0, FunctionSioInput, FunctionSioOutput, PinState,
-        PullDown, ValidFunction,
-    },
-    pac,
-    pio::PIOExt,
-    pio::Rx,
-    pio::StateMachine,
-    pio::Stopped,
-    sio::Sio,
-    watchdog::Watchdog,
-};
-
-use embedded_hal::digital::InputPin;
-use embedded_hal::digital::OutputPin;
-
-use ws2812_pio::Ws2812;
-
-use smart_leds::{SmartLedsWrite, RGB8};
-
-type ArbitraryOutPin = Pin<DynPinId, FunctionSioOutput, DynPullType>;
-type ArbitraryInPin = Pin<DynPinId, FunctionSioInput, DynPullType>;
-type ArbitraryPioPin = Pin<DynPinId, FunctionPio0, PullDown>;
-type RgbLed = Ws2812<
-    pac::PIO1,
-    hal::pio::SM0,
-    hal::timer::CountDown,
-    Pin<DynPinId, gpio::FunctionPio1, PullDown>,
->;
-
-/// The linker will place this boot block at the start of our program image. We
-/// need this to help the ROM bootloader get our code up and running.
-/// Note: This boot block is not necessary when using a rp-hal based BSP
-/// as the BSPs already perform this step.
-#[link_section = ".boot2"]
-#[used]
-pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GENERIC_03H;
+use smart_leds::RGB8;
 
 // If using a generic two-button controller, map A+B to be start
 const MAP_GENERIC_AB_TO_START: bool = true;
@@ -61,37 +29,44 @@ const MAP_GENERIC_AB_TO_START: bool = true;
 // Default: Pause + Green
 const CD32_COIN_BITMASK: u32 = 0b1001000;
 
-#[rp2040_hal::entry]
-fn main() -> ! {
+bind_interrupts!(struct Irqs {
+    PIO0_IRQ_0 => InterruptHandler<PIO0>;
+});
+
+// Board-specific config
+#[cfg(not(feature = "pi_pico"))]
+mod pcb;
+#[cfg(feature = "pi_pico")]
+mod pico;
+
+#[cfg(not(feature = "pi_pico"))]
+use pcb as board;
+#[cfg(feature = "pi_pico")]
+use pico as board;
+
+use board::*;
+
+type BoardPins = (
+    Selector,
+    PinSixDirection,
+    Soe,
+    InLatchPower,
+    InPowerSelect,
+    InFire1ClockBA,
+    InUpZ,
+    InDownY,
+    InLeftGnd,
+    InRightModeGnd,
+    InFire2DataCStart,
+    Led,
+    FifteenPinOutput,
+);
+
+#[embassy_executor::main]
+async fn main(_spawner: Spawner) {
     info!("Program start");
-    let mut pac: pac::Peripherals = pac::Peripherals::take().unwrap();
-    let mut watchdog = Watchdog::new(pac.WATCHDOG);
-    let sio = Sio::new(pac.SIO);
-
-    // External high-speed crystal on the pico board is 12Mhz
-    let external_xtal_freq_hz = 12_000_000u32;
-    let clocks = init_clocks_and_plls(
-        external_xtal_freq_hz,
-        pac.XOSC,
-        pac.CLOCKS,
-        pac.PLL_SYS,
-        pac.PLL_USB,
-        &mut pac.RESETS,
-        &mut watchdog,
-    )
-    .ok()
-    .unwrap();
-
-    let cpu_freq = clocks.system_clock.freq().to_Hz();
-
-    let pins = hal::gpio::Pins::new(
-        pac.IO_BANK0,
-        pac.PADS_BANK0,
-        sio.gpio_bank0,
-        &mut pac.RESETS,
-    );
-
-    let timer = hal::timer::Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+    let p = embassy_rp::init(Default::default());
+    let (pins, pio0, _pio1, dma0, ..) = split_peripherals(p);
 
     let platform_pins = get_pins(pins);
 
@@ -111,58 +86,38 @@ fn main() -> ! {
         outputs,
     ) = platform_pins;
 
-    let (mut led_pio, led_sm0, _, _, _) = pac.PIO1.split(&mut pac.RESETS);
-    let mut ws = Ws2812::new(
-        led.into_function().into_dyn_pin(),
-        &mut led_pio,
-        led_sm0,
-        clocks.peripheral_clock.freq(),
-        timer.count_down(),
-    );
+    let Pio {
+        mut common,
+        sm0,
+        sm1,
+        ..
+    } = Pio::new(pio0, Irqs);
+
+    // Set up LED
+    let led_prog = PioWs2812Program::new(&mut common);
+    let mut ws: PioWs2812<'_, PIO0, 1, 1> = PioWs2812::new(&mut common, sm1, dma0, led, &led_prog);
 
     // Connect GPIO2 to GND for Mega Drive/generic 9-pin. high or floating for CD32.
-    let mut selector = selector.into_pull_up_input();
-    let use_cd32 = selector.is_low().unwrap();
+    let selector = Input::new(selector, Pull::Up);
+    let use_cd32 = selector.is_low();
 
-    let pin_six_direction_set = pin_six_direction.into_push_pull_output();
-    let shifter_oe_set = shifter_oe.into_push_pull_output_in_state(PinState::Low);
+    let pin_six_direction_set = Output::new(pin_six_direction, Level::Low);
+    let shifter_oe_set = Output::new(shifter_oe, Level::Low);
 
     if use_cd32 {
+        info!("CD32 mode");
+
         let colour: RGB8 = (255, 0, 0).into();
-        ws.write([colour].iter().copied()).unwrap();
-        let power: ArbitraryOutPin = in_power_select
-            .into_function()
-            .into_pull_type()
-            .into_dyn_pin();
+        ws.write(&[colour]).await;
 
-        let up: ArbitraryInPin = in_up_z.into_function().into_pull_type().into_dyn_pin();
-
-        let down: ArbitraryInPin = in_down_y.into_function().into_pull_type().into_dyn_pin();
-
-        let left: ArbitraryInPin = in_left_x_gnd
-            .into_function()
-            .into_pull_type()
-            .into_dyn_pin();
-
-        let right: ArbitraryInPin = in_right_mode_gnd
-            .into_function()
-            .into_pull_type()
-            .into_dyn_pin();
-
-        let latch: ArbitraryPioPin = in_latch_power
-            .into_function()
-            .into_pull_type()
-            .into_dyn_pin();
-
-        let clock: ArbitraryPioPin = in_fire1_clock_b_a
-            .into_function()
-            .into_pull_type()
-            .into_dyn_pin();
-
-        let data: ArbitraryPioPin = in_fire2_data_c_start
-            .into_function()
-            .into_pull_type()
-            .into_dyn_pin();
+        let power = Output::new(in_power_select, Level::Low);
+        let up = Input::new(in_up_z, Pull::None);
+        let down = Input::new(in_down_y, Pull::None);
+        let left = Input::new(in_left_x_gnd, Pull::None);
+        let right = Input::new(in_right_mode_gnd, Pull::None);
+        let latch = common.make_pio_pin(in_latch_power);
+        let clock = common.make_pio_pin(in_fire1_clock_b_a);
+        let data = common.make_pio_pin(in_fire2_data_c_start);
 
         let cd32_pins = CD32Pins {
             power,
@@ -176,52 +131,29 @@ fn main() -> ! {
         };
 
         run_cd32_code(
-            cpu_freq,
             pin_six_direction_set,
             shifter_oe_set,
             cd32_pins,
             outputs,
-            pac.PIO0,
-            pac.DMA,
-            &mut pac.RESETS,
+            common,
+            sm0,
+            _spawner,
         );
     } else {
+        info!("Mega Drive mode");
+
         let colour: RGB8 = (0, 0, 255).into();
-        ws.write([colour].iter().copied()).unwrap();
+        ws.write(&[colour]).await;
+
         // First set up all the pins
-        let power: ArbitraryOutPin = in_latch_power
-            .into_function()
-            .into_pull_type()
-            .into_dyn_pin();
-
-        let select: ArbitraryPioPin = in_power_select
-            .into_function()
-            .into_pull_type()
-            .into_dyn_pin();
-
-        let b_a: ArbitraryPioPin = in_fire1_clock_b_a
-            .into_function()
-            .into_pull_type()
-            .into_dyn_pin();
-
-        let up_z: ArbitraryPioPin = in_up_z.into_function().into_pull_type().into_dyn_pin();
-
-        let down_y: ArbitraryPioPin = in_down_y.into_function().into_pull_type().into_dyn_pin();
-
-        let left_x_gnd: ArbitraryPioPin = in_left_x_gnd
-            .into_function()
-            .into_pull_type()
-            .into_dyn_pin();
-
-        let right_mode_gnd: ArbitraryPioPin = in_right_mode_gnd
-            .into_function()
-            .into_pull_type()
-            .into_dyn_pin();
-
-        let c_start: ArbitraryPioPin = in_fire2_data_c_start
-            .into_function()
-            .into_pull_type()
-            .into_dyn_pin();
+        let power = Output::new(in_latch_power, Level::Low);
+        let select = common.make_pio_pin(in_power_select);
+        let b_a = common.make_pio_pin(in_fire1_clock_b_a);
+        let up_z = common.make_pio_pin(in_up_z);
+        let down_y = common.make_pio_pin(in_down_y);
+        let left_x_gnd = common.make_pio_pin(in_left_x_gnd);
+        let right_mode_gnd = common.make_pio_pin(in_right_mode_gnd);
+        let c_start = common.make_pio_pin(in_fire2_data_c_start);
 
         let md_pins = MDPins {
             power,
@@ -236,221 +168,49 @@ fn main() -> ! {
 
         // Then run the actual code
         run_md_code(
-            cpu_freq,
             pin_six_direction_set,
             shifter_oe_set,
             md_pins,
             outputs,
-            timer,
-            pac.PIO0,
-            pac.DMA,
-            &mut pac.RESETS,
+            common,
+            sm0,
             ws,
+            _spawner,
         );
     }
 }
 
-#[allow(clippy::type_complexity)]
-#[cfg(feature = "pi_pico")]
-fn get_pins(
-    pins: gpio::Pins,
-) -> (
-    Pin<bank0::Gpio2, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio27, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio26, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio15, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio16, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio17, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio18, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio19, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio20, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio21, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio22, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio0, gpio::FunctionNull, gpio::PullDown>,
-    FifteenPinOutput,
-) {
-    let output_start: ArbitraryOutPin = pins.gpio11.into_function().into_pull_type().into_dyn_pin(); // Start
-    let output_coin: ArbitraryOutPin = pins.gpio12.into_function().into_pull_type().into_dyn_pin(); // Coin
-    let output_b1: ArbitraryOutPin = pins.gpio7.into_function().into_pull_type().into_dyn_pin(); // 1
-    let output_b2: ArbitraryOutPin = pins.gpio8.into_function().into_pull_type().into_dyn_pin(); // 2
-    let output_b3: ArbitraryOutPin = pins.gpio9.into_function().into_pull_type().into_dyn_pin(); // 3
-    let output_b4: ArbitraryOutPin = pins.gpio10.into_function().into_pull_type().into_dyn_pin(); // 4
-    let output_b5: ArbitraryOutPin = pins.gpio13.into_function().into_pull_type().into_dyn_pin(); // 5
-    let output_b6: ArbitraryOutPin = pins.gpio14.into_function().into_pull_type().into_dyn_pin(); // 6
-    let output_up: ArbitraryOutPin = pins.gpio3.into_function().into_pull_type().into_dyn_pin(); // Up
-    let output_down: ArbitraryOutPin = pins.gpio4.into_function().into_pull_type().into_dyn_pin(); // Down
-    let output_left: ArbitraryOutPin = pins.gpio5.into_function().into_pull_type().into_dyn_pin(); // Left
-    let output_right: ArbitraryOutPin = pins.gpio6.into_function().into_pull_type().into_dyn_pin(); // Right
-
-    let fpo = FifteenPinOutput {
-        output_start,
-        output_coin,  // Coin
-        output_b1,    // 1
-        output_b2,    // 2
-        output_b3,    // 3
-        output_b4,    // 4
-        output_b5,    // 5
-        output_b6,    // 6
-        output_up,    // Up
-        output_down,  // Down
-        output_left,  // Left
-        output_right, // Right
-    };
-    let selector = pins.gpio2;
-    let pin_six_direction = pins.gpio27;
-    let soe = pins.gpio26;
-
-    // 9-pin connector
-    let in_latch_power = pins.gpio15; // Pin 5
-    let in_power_select = pins.gpio16; // Pin 7
-    let in_fire1_clock_b_a = pins.gpio17; // Pin 6
-    let in_up_z = pins.gpio18; // Pin 1
-    let in_down_y = pins.gpio19; // Pin 2
-    let in_left_gnd = pins.gpio20; // Pin 3
-    let in_right_mode_gnd = pins.gpio21; // Pin 4
-    let in_fire2_data_c_start = pins.gpio22; // Pin 9
-    (
-        selector,              // Selector
-        pin_six_direction,     // Whether pin 6 on a level shifter is in or out
-        soe,                   // Shifter's Output Enable
-        in_latch_power,        // in_latch_power
-        in_power_select,       // in_power_select
-        in_fire1_clock_b_a,    // in_fire1_clock_b_a
-        in_up_z,               // in_up_z
-        in_down_y,             // in_down_y
-        in_left_gnd,           // in_left_gnd
-        in_right_mode_gnd,     // in_right_mode_gnd
-        in_fire2_data_c_start, // in_fire2_data_c_start
-        pins.gpio0,
-        fpo,
-    )
-}
-
-#[allow(clippy::type_complexity)]
-#[cfg(not(feature = "pi_pico"))]
-fn get_pins(
-    pins: gpio::Pins,
-) -> (
-    Pin<bank0::Gpio17, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio22, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio23, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio20, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio21, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio24, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio25, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio26, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio27, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio28, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio29, gpio::FunctionNull, gpio::PullDown>,
-    Pin<bank0::Gpio16, gpio::FunctionNull, gpio::PullDown>,
-    FifteenPinOutput,
-) {
-    let output_start: ArbitraryOutPin = pins.gpio9.into_function().into_pull_type().into_dyn_pin(); // Start
-    let output_coin: ArbitraryOutPin = pins.gpio8.into_function().into_pull_type().into_dyn_pin(); // Coin
-    let output_b1: ArbitraryOutPin = pins.gpio4.into_function().into_pull_type().into_dyn_pin(); // 1
-    let output_b2: ArbitraryOutPin = pins.gpio5.into_function().into_pull_type().into_dyn_pin(); // 2
-    let output_b3: ArbitraryOutPin = pins.gpio6.into_function().into_pull_type().into_dyn_pin(); // 3
-    let output_b4: ArbitraryOutPin = pins.gpio7.into_function().into_pull_type().into_dyn_pin(); // 4
-    let output_b5: ArbitraryOutPin = pins.gpio10.into_function().into_pull_type().into_dyn_pin(); // 5
-    let output_b6: ArbitraryOutPin = pins.gpio11.into_function().into_pull_type().into_dyn_pin(); // 6
-    let output_up: ArbitraryOutPin = pins.gpio0.into_function().into_pull_type().into_dyn_pin(); // Up
-    let output_down: ArbitraryOutPin = pins.gpio1.into_function().into_pull_type().into_dyn_pin(); // Down
-    let output_left: ArbitraryOutPin = pins.gpio2.into_function().into_pull_type().into_dyn_pin(); // Left
-    let output_right: ArbitraryOutPin = pins.gpio3.into_function().into_pull_type().into_dyn_pin(); // Right
-
-    let fpo = FifteenPinOutput {
-        output_start,
-        output_coin,  // Coin
-        output_b1,    // 1
-        output_b2,    // 2
-        output_b3,    // 3
-        output_b4,    // 4
-        output_b5,    // 5
-        output_b6,    // 6
-        output_up,    // Up
-        output_down,  // Down
-        output_left,  // Left
-        output_right, // Right
-    };
-    let selector = pins.gpio17;
-    let pin_six_direction = pins.gpio22;
-    let soe = pins.gpio23;
-    let in_latch_power = pins.gpio20;
-    let in_power_select = pins.gpio21;
-    let in_fire1_clock_b_a = pins.gpio24;
-    let in_up_z = pins.gpio25;
-    let in_down_y = pins.gpio26;
-    let in_left_gnd = pins.gpio27;
-    let in_right_mode_gnd = pins.gpio28;
-    let in_fire2_data_c_start = pins.gpio29;
-    (
-        selector,              // Selector
-        pin_six_direction,     // Whether pin 6 on a level shifter is in or out
-        soe,                   // Shifter's Output Enable
-        in_latch_power,        // in_latch_power
-        in_power_select,       // in_power_select
-        in_fire1_clock_b_a,    // in_fire1_clock_b_a
-        in_up_z,               // in_up_z
-        in_down_y,             // in_down_y
-        in_left_gnd,           // in_left_gnd
-        in_right_mode_gnd,     // in_right_mode_gnd
-        in_fire2_data_c_start, // in_fire2_data_c_start
-        pins.gpio16,
-        fpo,
-    )
-}
-
-// I'm just going to disable these clippy warnings where working around it
-// feels like it would be arbitrary
-#[allow(clippy::too_many_arguments)]
-fn run_cd32_code<A: AnyPin, B: AnyPin>(
-    cpu_freq: u32,
-    pin_six_direction: A,
-    shifter_oe: B,
+fn run_cd32_code(
+    pin_six_direction: Output<'static>,
+    shifter_oe: Output<'static>,
     cd32_pins: CD32Pins,
     outputs: FifteenPinOutput,
-    pio: pac::PIO0,
-    dma: pac::DMA,
-    pac_resets: &mut pac::RESETS,
-) -> !
-where
-    A::Id: ValidFunction<FunctionSioOutput>,
-    B::Id: ValidFunction<FunctionSioOutput>,
-{
-    let (sm, rx, cd32_pins) = setup_state_machine_cd32(cpu_freq, pio, pac_resets, cd32_pins);
-    read_cd32_loop(
+    mut pio: embassy_rp::pio::Common<'static, PIO0>,
+    mut sm0: StateMachine<'static, PIO0, 0>,
+    spawner: Spawner,
+) {
+    let cd32_pins = setup_state_machine_cd32(&mut pio, &mut sm0, cd32_pins);
+
+    let _ = spawner.spawn(read_cd32_loop(
         pin_six_direction,
         shifter_oe,
-        sm,
-        rx,
+        sm0,
         cd32_pins,
         outputs,
-        dma,
-        pac_resets,
-    );
+    ));
 }
 
-#[allow(clippy::type_complexity)]
-fn setup_state_machine_cd32(
-    cpu_freq: u32,
-    pio: pac::PIO0,
-    pac_resets: &mut pac::RESETS,
+fn setup_state_machine_cd32<'d>(
+    pio: &mut embassy_rp::pio::Common<'d, PIO0>,
+    sm0: &mut StateMachine<'d, PIO0, 0>,
     cd32_pins: CD32Pins,
-) -> (
-    StateMachine<(hal::pac::PIO0, hal::pio::SM0), Stopped>,
-    Rx<(hal::pac::PIO0, hal::pio::SM0)>,
-    CD32Pins,
-) {
-    let pio_multiplier: u16 = (cpu_freq / 140000).try_into().unwrap();
-
+) -> CD32Pins {
+    let pio_multiplier = clk_sys_freq() / 140_000;
     info!("PIO multiplier is {}", pio_multiplier);
 
-    let (power, up, down, left, right, latch, clock, data) = cd32_pins.destructure();
-    let set_base_id = latch.id().num;
-    let side_set_base_id = clock.id().num;
-    let in_base_id = data.id().num;
+    let (power, up, down, left, right, set_pin, side_set_pin, in_pin) = cd32_pins.destructure();
 
-    let read_cd32 = pio_proc::pio_asm!(
+    let read_cd32 = pio_asm!(
         ".side_set 1 opt",
         "begin:",
         "    set pins, 0    side 0 [2]",
@@ -483,61 +243,50 @@ fn setup_state_machine_cd32(
         "    jmp begin",
     );
 
-    let (mut pio, sm0, _, _, _) = pio.split(pac_resets);
-    let installed = pio.install(&read_cd32.program).unwrap();
-    let (mut sm, rx, _) = rp2040_hal::pio::PIOBuilder::from_installed_program(installed)
-        .side_set_pin_base(side_set_base_id)
-        .set_pins(set_base_id, 1)
-        .in_pin_base(in_base_id)
-        .clock_divisor_fixed_point(pio_multiplier, 0)
-        .build(sm0);
+    let mut cfg = embassy_rp::pio::Config::default();
+    cfg.use_program(&pio.load_program(&read_cd32.program), &[&side_set_pin]);
+    cfg.set_set_pins(&[&set_pin]);
+    cfg.set_in_pins(&[&in_pin]);
+    cfg.clock_divider = pio_multiplier.to_fixed();
+    //cfg.shift_in.auto_fill = true;
+    //cfg.shift_in.direction = embassy_rp::pio::ShiftDirection::Left;
 
-    sm.set_pindirs([
-        (set_base_id, hal::pio::PinDir::Output),
-        (side_set_base_id, hal::pio::PinDir::Output),
-        (in_base_id, hal::pio::PinDir::Input),
-    ]);
+    sm0.set_pin_dirs(PioDirection::Out, &[&set_pin, &side_set_pin]);
+    sm0.set_pin_dirs(PioDirection::In, &[&in_pin]);
 
-    let cd32_pins = CD32Pins {
+    sm0.set_config(&cfg);
+    sm0.set_enable(false);
+
+    CD32Pins {
         power,
         up,
         down,
         left,
         right,
-        latch,
-        clock,
-        data,
-    };
-
-    (sm, rx, cd32_pins)
+        latch: set_pin,
+        clock: side_set_pin,
+        data: in_pin,
+    }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn read_cd32_loop<A: AnyPin, B: AnyPin>(
-    pin_six_direction: A,
-    shifter_oe: B,
-    sm: StateMachine<(hal::pac::PIO0, hal::pio::SM0), Stopped>,
-    rx: Rx<(hal::pac::PIO0, hal::pio::SM0)>,
+#[embassy_executor::task]
+async fn read_cd32_loop(
+    mut pin_six_direction: Output<'static>,
+    mut shifter_oe: Output<'static>,
+    mut sm0: StateMachine<'static, PIO0, 0>,
     cd32_pins: CD32Pins,
     outputs: FifteenPinOutput,
-    dma: pac::DMA,
-    pac_resets: &mut pac::RESETS,
-) -> !
-where
-    A::Id: ValidFunction<FunctionSioOutput>,
-    B::Id: ValidFunction<FunctionSioOutput>,
-{
-    let (mut power, mut up, mut down, mut left, mut right, _, _, _) = cd32_pins.destructure();
-    power.set_high().unwrap();
+) {
+    let (mut power, up, down, left, right, _, _, _) = cd32_pins.destructure();
 
-    pin_six_direction
-        .into()
-        .into_push_pull_output()
-        .set_high()
-        .unwrap();
+    // Pin six is going out
+    pin_six_direction.set_high();
 
     // Enable the output on the level shifter
-    shifter_oe.into().into_push_pull_output().set_low().unwrap();
+    shifter_oe.set_low();
+
+    // Enable the power to the controller
+    power.set_high();
 
     // There absolutely must be a better way of doing this, but this works.
     let (
@@ -555,163 +304,109 @@ where
         pin_right,
     ) = outputs.destructure();
     // Initialise all the pins
-    let mut pin_start: HiZPin = HiZPin::new(pin_start);
-    let mut pin_coin: HiZPin = HiZPin::new(pin_coin);
-    let mut pin_b1: HiZPin = HiZPin::new(pin_b1);
-    let mut pin_b2: HiZPin = HiZPin::new(pin_b2);
-    let mut pin_b3: HiZPin = HiZPin::new(pin_b3);
-    let mut pin_b4: HiZPin = HiZPin::new(pin_b4);
-    let mut pin_b5: HiZPin = HiZPin::new(pin_b5);
-    let mut pin_b6: HiZPin = HiZPin::new(pin_b6);
-    let mut pin_up: HiZPin = HiZPin::new(pin_up);
-    let mut pin_down: HiZPin = HiZPin::new(pin_down);
-    let mut pin_left: HiZPin = HiZPin::new(pin_left);
-    let mut pin_right: HiZPin = HiZPin::new(pin_right);
+    let mut pin_start = OutputOpenDrain::new(pin_start, Level::High);
+    let mut pin_coin = OutputOpenDrain::new(pin_coin, Level::High);
+    let mut pin_b1 = OutputOpenDrain::new(pin_b1, Level::High);
+    let mut pin_b2 = OutputOpenDrain::new(pin_b2, Level::High);
+    let mut pin_b3 = OutputOpenDrain::new(pin_b3, Level::High);
+    let mut pin_b4 = OutputOpenDrain::new(pin_b4, Level::High);
+    let mut pin_b5 = OutputOpenDrain::new(pin_b5, Level::High);
+    let mut pin_b6 = OutputOpenDrain::new(pin_b6, Level::High);
+    let mut pin_up = OutputOpenDrain::new(pin_up, Level::High);
+    let mut pin_down = OutputOpenDrain::new(pin_down, Level::High);
+    let mut pin_left = OutputOpenDrain::new(pin_left, Level::High);
+    let mut pin_right = OutputOpenDrain::new(pin_right, Level::High);
 
-    sm.start();
-
-    let dma = dma.split(pac_resets);
-    let rx_buf = singleton!(: u32 = 0).unwrap();
-    let rx_buf2 = singleton!(: u32 = 0).unwrap();
-
-    let rx_transfer = double_buffer::Config::new((dma.ch0, dma.ch1), rx, rx_buf).start();
-    let mut rx_transfer = rx_transfer.write_next(rx_buf2);
+    sm0.set_enable(true);
 
     loop {
-        if rx_transfer.is_done() {
-            let (rx_buf, next_rx_transfer) = rx_transfer.wait();
-            // We only care about 7 bits of the 32 bits, make it a bit easier to deal with
-            let mut our_data = *rx_buf >> 25;
+        let rx = sm0.rx().wait_pull().await;
+        // We only care about 7 bits of the 32 bits, make it a bit easier to deal with
+        let mut our_data = rx >> 25;
 
-            // Set CD32_COIN_BITMASK to customise what this matches
-            pin_coin
-                .set_state(get_pin_state(our_data & CD32_COIN_BITMASK))
-                .unwrap();
+        // Set CD32_COIN_BITMASK to customise what this matches
+        pin_coin.set_level(get_pin_state(our_data & CD32_COIN_BITMASK));
 
-            // If we've got the chord for the coin button, get rid of the component buttons so they don't fire as well
-            if (our_data & CD32_COIN_BITMASK) == 0 {
-                our_data |= CD32_COIN_BITMASK;
-            }
+        // If we've got the chord for the coin button, get rid of the component buttons so they don't fire as well
+        if (our_data & CD32_COIN_BITMASK) == 0 {
+            our_data |= CD32_COIN_BITMASK;
+        }
 
-            pin_start
-                .set_state(get_pin_state(our_data & 0b1000000))
-                .unwrap();
-            pin_b1
-                .set_state(get_pin_state(our_data & 0b0001000))
-                .unwrap();
-            pin_b2
-                .set_state(get_pin_state(our_data & 0b0000100))
-                .unwrap();
-            pin_b3
-                .set_state(get_pin_state(our_data & 0b0100000))
-                .unwrap();
-            pin_b4
-                .set_state(get_pin_state(our_data & 0b0000010))
-                .unwrap();
-            pin_b5
-                .set_state(get_pin_state(our_data & 0b0000001))
-                .unwrap();
-            pin_b6
-                .set_state(get_pin_state(our_data & 0b0010000))
-                .unwrap();
+        pin_start.set_level(get_pin_state(our_data & 0b1000000));
+        pin_b1.set_level(get_pin_state(our_data & 0b0001000));
+        pin_b2.set_level(get_pin_state(our_data & 0b0000100));
+        pin_b3.set_level(get_pin_state(our_data & 0b0100000));
+        pin_b4.set_level(get_pin_state(our_data & 0b0000010));
+        pin_b5.set_level(get_pin_state(our_data & 0b0000001));
+        pin_b6.set_level(get_pin_state(our_data & 0b0010000));
 
-            if our_data != 127 {
-                debug!("Got bits: {:#09b}", our_data);
-                debug!("            S361245");
-                debug!(
-                    "Buttons: 1 {} 2 {} 3 {} 4 {} 5 {} 6 {} start {} coin {}",
-                    pin_b1.is_high(),
-                    pin_b2.is_high(),
-                    pin_b3.is_high(),
-                    pin_b4.is_high(),
-                    pin_b5.is_high(),
-                    pin_b6.is_high(),
-                    pin_start.is_high(),
-                    pin_coin.is_high(),
-                );
-            }
-
-            rx_transfer = next_rx_transfer.write_next(rx_buf);
-
-            pin_up
-                .set_state(PinState::from(up.is_high().unwrap()))
-                .unwrap();
-            pin_down
-                .set_state(PinState::from(down.is_high().unwrap()))
-                .unwrap();
-            pin_left
-                .set_state(PinState::from(left.is_high().unwrap()))
-                .unwrap();
-            pin_right
-                .set_state(PinState::from(right.is_high().unwrap()))
-                .unwrap();
-
+        if our_data != 127 {
+            debug!("Got bits: {:#09b}", our_data);
+            debug!("            S361245");
             debug!(
-                "Up: {}, Down: {}, Left: {}, Right: {}",
-                pin_up.is_high(),
-                pin_down.is_high(),
-                pin_left.is_high(),
-                pin_right.is_high(),
+                "Buttons: 1 {} 2 {} 3 {} 4 {} 5 {} 6 {} start {} coin {}",
+                pin_b1.is_set_high(),
+                pin_b2.is_set_high(),
+                pin_b3.is_set_high(),
+                pin_b4.is_set_high(),
+                pin_b5.is_set_high(),
+                pin_b6.is_set_high(),
+                pin_start.is_set_high(),
+                pin_coin.is_set_high(),
             );
         }
+
+        pin_up.set_level(Level::from(up.is_high()));
+        pin_down.set_level(Level::from(down.is_high()));
+        pin_left.set_level(Level::from(left.is_high()));
+        pin_right.set_level(Level::from(right.is_high()));
+
+        debug!(
+            "Up: {}, Down: {}, Left: {}, Right: {}",
+            pin_up.is_set_high(),
+            pin_down.is_set_high(),
+            pin_left.is_set_high(),
+            pin_right.is_set_high(),
+        );
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run_md_code<A: AnyPin, B: AnyPin>(
-    cpu_freq: u32,
-    pin_six_direction: A,
-    shifter_oe: B,
+fn run_md_code(
+    pin_six_direction: Output<'static>,
+    shifter_oe: Output<'static>,
     md_pins: MDPins,
     outputs: FifteenPinOutput,
-    timer: hal::timer::Timer,
-    pio: pac::PIO0,
-    dma: pac::DMA,
-    pac_resets: &mut pac::RESETS,
-    ws: RgbLed,
-) -> !
-where
-    A::Id: ValidFunction<FunctionSioOutput>,
-    B::Id: ValidFunction<FunctionSioOutput>,
-{
-    let (sm, rx, md_pins) = setup_state_machine_md(cpu_freq, pio, pac_resets, md_pins);
+    mut pio: embassy_rp::pio::Common<'static, PIO0>,
+    mut sm0: StateMachine<'static, PIO0, 0>,
+    ws: PioWs2812<'static, PIO0, 1, 1>,
+    spawner: Spawner,
+) {
+    let md_pins = setup_state_machine_md(&mut pio, &mut sm0, md_pins);
 
-    read_md_loop(
+    let _ = spawner.spawn(read_md_loop(
         pin_six_direction,
         shifter_oe,
-        sm,
-        rx,
+        sm0,
         md_pins,
         outputs,
-        timer,
-        dma,
-        pac_resets,
         ws,
-    );
+    ));
 }
 
-#[allow(clippy::type_complexity)]
-fn setup_state_machine_md(
-    cpu_freq: u32,
-    pio: pac::PIO0,
-    pac_resets: &mut pac::RESETS,
+fn setup_state_machine_md<'d>(
+    pio: &mut embassy_rp::pio::Common<'d, PIO0>,
+    sm0: &mut StateMachine<'d, PIO0, 0>,
     md_pins: MDPins,
-) -> (
-    StateMachine<(hal::pac::PIO0, hal::pio::SM0), Stopped>,
-    Rx<(hal::pac::PIO0, hal::pio::SM0)>,
-    MDPins,
-) {
-    let pio_multiplier: u16 = (cpu_freq / 140000).try_into().unwrap();
+) -> MDPins {
+    let pio_multiplier = clk_sys_freq() / 140_000;
 
     info!("PIO multiplier is {}", pio_multiplier);
 
-    let (power, side_set_base, in_base, up_z, down_y, left_x_gnd, right_mode_gnd, c_start) =
+    let (power, side_set_pin, b_a, up_z, down_y, left_x_gnd, right_mode_gnd, c_start) =
         md_pins.destructure();
 
-    let side_set_base_id = side_set_base.id().num;
-    let in_base_id = in_base.id().num;
-
-    let read_md = pio_proc::pio_asm!(
+    let read_md = pio_asm!(
     ".side_set 1",
     ".wrap_target",
     "    in  pins, 6        side 0", // Start/A/GND/GND
@@ -739,66 +434,47 @@ fn setup_state_machine_md(
     ".wrap",
     );
 
-    let (mut pio, sm0, _, _, _) = pio.split(pac_resets);
-    let installed = pio.install(&read_md.program).unwrap();
-    let (mut sm, rx, _) = rp2040_hal::pio::PIOBuilder::from_installed_program(installed)
-        .side_set_pin_base(side_set_base_id)
-        .in_pin_base(in_base_id)
-        .clock_divisor_fixed_point(pio_multiplier, 0)
-        .build(sm0);
+    let mut cfg = embassy_rp::pio::Config::default();
+    cfg.use_program(&pio.load_program(&read_md.program), &[&side_set_pin]);
+    cfg.set_in_pins(&[&b_a, &up_z, &down_y, &left_x_gnd, &right_mode_gnd, &c_start]);
+    cfg.clock_divider = pio_multiplier.to_fixed();
 
-    sm.set_pindirs([
-        (side_set_base_id, hal::pio::PinDir::Output),
-        (in_base_id, hal::pio::PinDir::Input),
-        (in_base_id + 1, hal::pio::PinDir::Input),
-        (in_base_id + 2, hal::pio::PinDir::Input),
-        (in_base_id + 3, hal::pio::PinDir::Input),
-        (in_base_id + 4, hal::pio::PinDir::Input),
-        (in_base_id + 5, hal::pio::PinDir::Input),
-    ]);
+    sm0.set_pin_dirs(PioDirection::Out, &[&side_set_pin]);
+    sm0.set_pin_dirs(
+        PioDirection::In,
+        &[&b_a, &up_z, &down_y, &left_x_gnd, &right_mode_gnd, &c_start],
+    );
 
-    let md_pins = MDPins {
+    sm0.set_config(&cfg);
+    sm0.set_enable(false);
+
+    MDPins {
         power,
-        select: side_set_base,
-        b_a: in_base,
+        select: side_set_pin,
+        b_a,
         up_z,
         down_y,
         left_x_gnd,
         right_mode_gnd,
         c_start,
-    };
-
-    (sm, rx, md_pins)
+    }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn read_md_loop<A: AnyPin, B: AnyPin>(
-    pin_six_direction: A,
-    shifter_oe: B,
-    sm: StateMachine<(hal::pac::PIO0, hal::pio::SM0), Stopped>,
-    rx: Rx<(hal::pac::PIO0, hal::pio::SM0)>,
+#[embassy_executor::task]
+async fn read_md_loop(
+    mut pin_six_direction: Output<'static>,
+    mut shifter_oe: Output<'static>,
+    mut sm0: StateMachine<'static, PIO0, 0>,
     md_pins: MDPins,
-    out_pins: FifteenPinOutput,
-    timer: hal::timer::Timer,
-    dma: pac::DMA,
-    pac_resets: &mut pac::RESETS,
-    mut ws: RgbLed,
-) -> !
-where
-    A::Id: ValidFunction<FunctionSioOutput>,
-    B::Id: ValidFunction<FunctionSioOutput>,
-{
+    outputs: FifteenPinOutput,
+    mut ws: PioWs2812<'static, PIO0, 1, 1>,
+) -> ! {
     let (mut plus_five_volts, _, _, _, _, _, _, _) = md_pins.destructure();
-    plus_five_volts.set_high().unwrap();
+    plus_five_volts.set_high();
 
-    pin_six_direction
-        .into()
-        .into_push_pull_output()
-        .set_low()
-        .unwrap();
-
+    pin_six_direction.set_low();
     // Enable the output on the level shifter
-    shifter_oe.into().into_push_pull_output().set_low().unwrap();
+    shifter_oe.set_low();
 
     // There absolutely must be a better way of doing this, but this works.
     let (
@@ -814,221 +490,162 @@ where
         pin_down,
         pin_left,
         pin_right,
-    ) = out_pins.destructure();
+    ) = outputs.destructure();
 
     // Initialise all the pins
-    let mut pin_start: HiZPin = HiZPin::new(pin_start);
-    let mut pin_coin: HiZPin = HiZPin::new(pin_coin);
-    let mut pin_b1: HiZPin = HiZPin::new(pin_b1);
-    let mut pin_b2: HiZPin = HiZPin::new(pin_b2);
-    let mut pin_b3: HiZPin = HiZPin::new(pin_b3);
-    let mut pin_b4: HiZPin = HiZPin::new(pin_b4);
-    let mut pin_b5: HiZPin = HiZPin::new(pin_b5);
-    let mut pin_b6: HiZPin = HiZPin::new(pin_b6);
-    let mut pin_up: HiZPin = HiZPin::new(pin_up);
-    let mut pin_down: HiZPin = HiZPin::new(pin_down);
-    let mut pin_left: HiZPin = HiZPin::new(pin_left);
-    let mut pin_right: HiZPin = HiZPin::new(pin_right);
+    let mut pin_start = OutputOpenDrain::new(pin_start, Level::High);
+    let mut pin_coin = OutputOpenDrain::new(pin_coin, Level::High);
+    let mut pin_b1 = OutputOpenDrain::new(pin_b1, Level::High);
+    let mut pin_b2 = OutputOpenDrain::new(pin_b2, Level::High);
+    let mut pin_b3 = OutputOpenDrain::new(pin_b3, Level::High);
+    let mut pin_b4 = OutputOpenDrain::new(pin_b4, Level::High);
+    let mut pin_b5 = OutputOpenDrain::new(pin_b5, Level::High);
+    let mut pin_b6 = OutputOpenDrain::new(pin_b6, Level::High);
+    let mut pin_up = OutputOpenDrain::new(pin_up, Level::High);
+    let mut pin_down = OutputOpenDrain::new(pin_down, Level::High);
+    let mut pin_left = OutputOpenDrain::new(pin_left, Level::High);
+    let mut pin_right = OutputOpenDrain::new(pin_right, Level::High);
 
-    sm.start();
-
-    let dma = dma.split(pac_resets);
-    let rx_buf = singleton!(: u32 = 0).unwrap();
-    let rx_buf2 = singleton!(: u32 = 0).unwrap();
-
-    let rx_transfer = double_buffer::Config::new((dma.ch0, dma.ch1), rx, rx_buf).start();
-    let mut rx_transfer = rx_transfer.write_next(rx_buf2);
+    sm0.set_enable(true);
 
     let mut swap_rows = false;
     // Whilst theoretically using 0 for a null value might lead to clashes, it's irrelevant because the next polling loop will fix it
     let mut mode_pressed_time = 0;
 
     loop {
-        if rx_transfer.is_done() {
-            let (rx_buf, next_rx_transfer) = rx_transfer.wait();
-            // We only care about 24 bits of the 32 bits, make it a bit easier to deal with
-            let our_data = *rx_buf >> 8;
+        let rx = sm0.rx().wait_pull().await;
+        // We only care about 24 bits of the 32 bits, make it a bit easier to deal with
+        let our_data = rx >> 8;
 
-            if our_data & 0b000000011000011000000000 == 0 {
-                debug!("Mega Drive");
-                // Mega Drive controller
-                // Three button Mega Drive controller buttons:
-                // Data: 0bxxxxxxxxxxxxSGGDUACRLDUA
-                pin_start
-                    .set_state(get_pin_state(our_data & 0b100000000000))
-                    .unwrap();
-                pin_down
-                    .set_state(get_pin_state(our_data & 0b000100000000))
-                    .unwrap();
-                pin_up
-                    .set_state(get_pin_state(our_data & 0b000010000000))
-                    .unwrap();
+        if our_data & 0b000000011000011000000000 == 0 {
+            debug!("Mega Drive");
+            // Mega Drive controller
+            // Three button Mega Drive controller buttons:
+            // Data: 0bxxxxxxxxxxxxSGGDUACRLDUA
+            pin_start.set_level(get_pin_state(our_data & 0b100000000000));
+            pin_down.set_level(get_pin_state(our_data & 0b000100000000));
+            pin_up.set_level(get_pin_state(our_data & 0b000010000000));
 
-                if !swap_rows {
-                    pin_b1
-                        .set_state(get_pin_state(our_data & 0b000001000000))
-                        .unwrap();
-                    pin_b2
-                        .set_state(get_pin_state(our_data & 0b000000000001))
-                        .unwrap();
-                    pin_b3
-                        .set_state(get_pin_state(our_data & 0b000000100000))
-                        .unwrap();
+            if !swap_rows {
+                pin_b1.set_level(get_pin_state(our_data & 0b000001000000));
+                pin_b2.set_level(get_pin_state(our_data & 0b000000000001));
+                pin_b3.set_level(get_pin_state(our_data & 0b000000100000));
+            }
+            pin_right.set_level(get_pin_state(our_data & 0b000000010000));
+            pin_left.set_level(get_pin_state(our_data & 0b000000001000));
+
+            if our_data & 0b000000011110000000000000 == 0 {
+                // 6 button controller
+                // Extra buttons: 0bxMXYZx
+                let six_button_data = our_data >> 18;
+                debug!("Got a 6 button");
+                if swap_rows {
+                    pin_b1.set_level(get_pin_state(six_button_data & 0b001000));
+                    pin_b2.set_level(get_pin_state(six_button_data & 0b000100));
+                    pin_b3.set_level(get_pin_state(six_button_data & 0b000010));
+                    pin_b4.set_level(get_pin_state(our_data & 0b000001000000));
+                    pin_b5.set_level(get_pin_state(our_data & 0b000000000001));
+                    pin_b6.set_level(get_pin_state(our_data & 0b000000100000));
+                } else {
+                    pin_b4.set_level(get_pin_state(six_button_data & 0b001000));
+                    pin_b5.set_level(get_pin_state(six_button_data & 0b000100));
+                    pin_b6.set_level(get_pin_state(six_button_data & 0b000010));
                 }
-                pin_right
-                    .set_state(get_pin_state(our_data & 0b000000010000))
-                    .unwrap();
-                pin_left
-                    .set_state(get_pin_state(our_data & 0b000000001000))
-                    .unwrap();
 
-                if our_data & 0b000000011110000000000000 == 0 {
-                    // 6 button controller
-                    // Extra buttons: 0bxMXYZx
-                    let six_button_data = our_data >> 18;
-                    debug!("Got a 6 button");
-                    if swap_rows {
-                        pin_b1
-                            .set_state(get_pin_state(six_button_data & 0b001000))
-                            .unwrap();
-                        pin_b2
-                            .set_state(get_pin_state(six_button_data & 0b000100))
-                            .unwrap();
-                        pin_b3
-                            .set_state(get_pin_state(six_button_data & 0b000010))
-                            .unwrap();
-                        pin_b4
-                            .set_state(get_pin_state(our_data & 0b000001000000))
-                            .unwrap();
-                        pin_b5
-                            .set_state(get_pin_state(our_data & 0b000000000001))
-                            .unwrap();
-                        pin_b6
-                            .set_state(get_pin_state(our_data & 0b000000100000))
-                            .unwrap();
+                pin_coin.set_level(get_pin_state(six_button_data & 0b010000));
+
+                // Handle swapping around A/B/C and X/Y/Z
+                if six_button_data & 0b010000 == 0 {
+                    if mode_pressed_time == 0 {
+                        mode_pressed_time = Instant::now().as_millis();
                     } else {
-                        pin_b4
-                            .set_state(get_pin_state(six_button_data & 0b001000))
-                            .unwrap();
-                        pin_b5
-                            .set_state(get_pin_state(six_button_data & 0b000100))
-                            .unwrap();
-                        pin_b6
-                            .set_state(get_pin_state(six_button_data & 0b000010))
-                            .unwrap();
-                    }
-
-                    pin_coin
-                        .set_state(get_pin_state(six_button_data & 0b010000))
-                        .unwrap();
-
-                    // Handle swapping around A/B/C and X/Y/Z
-                    if six_button_data & 0b010000 == 0 {
-                        if mode_pressed_time == 0 {
-                            mode_pressed_time = timer.get_counter_low();
-                        } else {
-                            // Hold for three seconds to invert
-                            if timer.get_counter_low() - mode_pressed_time > 1_000_000 * 3 {
-                                swap_rows = !swap_rows;
-                                mode_pressed_time = 0;
-                                debug!("Swapping rows, inverted now: {}", swap_rows);
-                            }
-                            let mut colour: RGB8 = (0, 0, 255).into();
-
-                            if swap_rows {
-                                colour = (255, 255, 0).into();
-                            }
-
-                            ws.write([colour].iter().copied()).unwrap();
+                        // Hold for three seconds to invert
+                        if Instant::now().as_millis() - mode_pressed_time > 1_000 * 3 {
+                            swap_rows = !swap_rows;
+                            mode_pressed_time = 0;
+                            debug!("Swapping rows, inverted now: {}", swap_rows);
                         }
-                    } else {
-                        mode_pressed_time = 0;
+                        let mut colour: RGB8 = (0, 0, 255).into();
+
+                        if swap_rows {
+                            colour = (255, 255, 0).into();
+                        }
+
+                        ws.write(&[colour]).await;
                     }
                 } else {
-                    // Tidy up buttons we don't have
-                    pin_b4.set_state(PinState::High).unwrap();
-                    pin_b5.set_state(PinState::High).unwrap();
-                    pin_b6.set_state(PinState::High).unwrap();
-
-                    // There are no rows to swap
-                    swap_rows = false;
                     mode_pressed_time = 0;
                 }
             } else {
-                // Generic controller
-                // 0b2RLDU1
-                if MAP_GENERIC_AB_TO_START {
-                    pin_start
-                        .set_state(get_pin_state(our_data & 0b100001))
-                        .unwrap();
-                } else {
-                    pin_start.set_state(PinState::High).unwrap();
-                }
+                // Tidy up buttons we don't have
+                pin_b4.set_level(Level::High);
+                pin_b5.set_level(Level::High);
+                pin_b6.set_level(Level::High);
 
-                pin_b1
-                    .set_state(get_pin_state(our_data & 0b000001))
-                    .unwrap();
-
-                pin_down
-                    .set_state(get_pin_state(our_data & 0b000100))
-                    .unwrap();
-                pin_up
-                    .set_state(get_pin_state(our_data & 0b000010))
-                    .unwrap();
-                pin_right
-                    .set_state(get_pin_state(our_data & 0b010000))
-                    .unwrap();
-                pin_left
-                    .set_state(get_pin_state(our_data & 0b001000))
-                    .unwrap();
-
-                // Tidy up missing buttons
-                pin_b3.set_state(PinState::High).unwrap();
-                pin_b4.set_state(PinState::High).unwrap();
-                pin_b5.set_state(PinState::High).unwrap();
-                pin_b6.set_state(PinState::High).unwrap();
-                pin_coin.set_state(PinState::High).unwrap();
+                // There are no rows to swap
+                swap_rows = false;
+                mode_pressed_time = 0;
+            }
+        } else {
+            // Generic controller
+            // 0b2RLDU1
+            if MAP_GENERIC_AB_TO_START {
+                pin_start.set_level(get_pin_state(our_data & 0b100001));
+            } else {
+                pin_start.set_level(Level::High);
             }
 
-            debug!("Got bits: {:#026b}", our_data);
-            rx_transfer = next_rx_transfer.write_next(rx_buf);
+            pin_b1.set_level(get_pin_state(our_data & 0b000001));
+
+            pin_down.set_level(get_pin_state(our_data & 0b000100));
+            pin_up.set_level(get_pin_state(our_data & 0b000010));
+            pin_right.set_level(get_pin_state(our_data & 0b010000));
+            pin_left.set_level(get_pin_state(our_data & 0b001000));
+
+            // Tidy up missing buttons
+            pin_b3.set_level(Level::High);
+            pin_b4.set_level(Level::High);
+            pin_b5.set_level(Level::High);
+            pin_b6.set_level(Level::High);
+            pin_coin.set_level(Level::High)
         }
+
+        debug!("Got bits: {:#026b}", our_data);
     }
 }
-// End of file
 
 // Let's avoid having to have all this everywhere
 struct FifteenPinOutput {
-    output_start: ArbitraryOutPin,
-    output_coin: ArbitraryOutPin,
-    output_b1: ArbitraryOutPin,
-    output_b2: ArbitraryOutPin,
-    output_b3: ArbitraryOutPin,
-    output_b4: ArbitraryOutPin,
-    output_b5: ArbitraryOutPin,
-    output_b6: ArbitraryOutPin,
-    output_up: ArbitraryOutPin,
-    output_down: ArbitraryOutPin,
-    output_left: ArbitraryOutPin,
-    output_right: ArbitraryOutPin,
+    output_start: OutputStart,
+    output_coin: OutputCoin,
+    output_b1: OutputB1,
+    output_b2: OutputB2,
+    output_b3: OutputB3,
+    output_b4: OutputB4,
+    output_b5: OutputB5,
+    output_b6: OutputB6,
+    output_up: OutputUp,
+    output_down: OutputDown,
+    output_left: OutputLeft,
+    output_right: OutputRight,
 }
 
 impl FifteenPinOutput {
     fn destructure(
         self,
     ) -> (
-        ArbitraryOutPin,
-        ArbitraryOutPin,
-        ArbitraryOutPin,
-        ArbitraryOutPin,
-        ArbitraryOutPin,
-        ArbitraryOutPin,
-        ArbitraryOutPin,
-        ArbitraryOutPin,
-        ArbitraryOutPin,
-        ArbitraryOutPin,
-        ArbitraryOutPin,
-        ArbitraryOutPin,
+        OutputStart,
+        OutputCoin,
+        OutputB1,
+        OutputB2,
+        OutputB3,
+        OutputB4,
+        OutputB5,
+        OutputB6,
+        OutputUp,
+        OutputDown,
+        OutputLeft,
+        OutputRight,
     ) {
         (
             self.output_start,
@@ -1047,98 +664,112 @@ impl FifteenPinOutput {
     }
 }
 
-// A wrapper that drives the pin low for low, but disables output for high
-struct HiZPin {
-    pin: ArbitraryOutPin,
+// Turn a positive bitmask result into Level::High and anything else into Level::Low
+fn get_pin_state(result: u32) -> Level {
+    Level::from(result > 0)
 }
 
-impl HiZPin {
-    fn new(mut pin: ArbitraryOutPin) -> HiZPin {
-        // Initialise the pin by *first* ensuring output is disabled, *then* setting low.
-        // This allows us to just toggle output being enabled or not
-        pin.set_output_enable_override(gpio::OutputEnableOverride::Disable);
-        pin.set_low().unwrap();
-
-        Self { pin }
-    }
-
-    fn is_high(&mut self) -> bool {
-        self.pin.get_output_enable_override() == gpio::OutputEnableOverride::Disable
-    }
-
-    fn set_state(&mut self, desired_state: PinState) -> Result<(), gpio::Error> {
-        if desired_state == PinState::Low {
-            self.pin
-                .set_output_enable_override(gpio::OutputEnableOverride::Enable);
-            Ok(())
-        } else {
-            self.pin
-                .set_output_enable_override(gpio::OutputEnableOverride::Disable);
-            Ok(())
-        }
-    }
-}
-
-// Turn a positive bitmask result into PinState::High and anything else into PinState::Low
-fn get_pin_state(result: u32) -> PinState {
-    PinState::from(result > 0)
+fn split_peripherals(
+    p: Peripherals,
+) -> (
+    Pins,
+    Peri<'static, embassy_rp::peripherals::PIO0>,
+    Peri<'static, embassy_rp::peripherals::PIO1>,
+    Peri<'static, embassy_rp::peripherals::DMA_CH0>,
+) {
+    (
+        Pins {
+            pin0: p.PIN_0,
+            pin1: p.PIN_1,
+            pin2: p.PIN_2,
+            pin3: p.PIN_3,
+            pin4: p.PIN_4,
+            pin5: p.PIN_5,
+            pin6: p.PIN_6,
+            pin7: p.PIN_7,
+            pin8: p.PIN_8,
+            pin9: p.PIN_9,
+            pin10: p.PIN_10,
+            pin11: p.PIN_11,
+            pin12: p.PIN_12,
+            pin13: p.PIN_13,
+            pin14: p.PIN_14,
+            pin15: p.PIN_15,
+            pin16: p.PIN_16,
+            pin17: p.PIN_17,
+            pin18: p.PIN_18,
+            pin19: p.PIN_19,
+            pin20: p.PIN_20,
+            pin21: p.PIN_21,
+            pin22: p.PIN_22,
+            pin23: p.PIN_23,
+            pin24: p.PIN_24,
+            pin25: p.PIN_25,
+            pin26: p.PIN_26,
+            pin27: p.PIN_27,
+            pin28: p.PIN_28,
+            pin29: p.PIN_29,
+        },
+        p.PIO0,
+        p.PIO1,
+        p.DMA_CH0,
+    )
 }
 
 struct CD32Pins {
-    power: ArbitraryOutPin,
-    up: ArbitraryInPin,
-    down: ArbitraryInPin,
-    left: ArbitraryInPin,
-    right: ArbitraryInPin,
-    latch: ArbitraryPioPin,
-    clock: ArbitraryPioPin,
-    data: ArbitraryPioPin,
+    power: Output<'static>,
+    up: Input<'static>,
+    down: Input<'static>,
+    left: Input<'static>,
+    right: Input<'static>,
+    latch: embassy_rp::pio::Pin<'static, PIO0>,
+    clock: embassy_rp::pio::Pin<'static, PIO0>,
+    data: embassy_rp::pio::Pin<'static, PIO0>,
 }
 
+type CD32PinsTuple = (
+    Output<'static>,
+    Input<'static>,
+    Input<'static>,
+    Input<'static>,
+    Input<'static>,
+    embassy_rp::pio::Pin<'static, PIO0>,
+    embassy_rp::pio::Pin<'static, PIO0>,
+    embassy_rp::pio::Pin<'static, PIO0>,
+);
+
 impl CD32Pins {
-    fn destructure(
-        self,
-    ) -> (
-        ArbitraryOutPin,
-        ArbitraryInPin,
-        ArbitraryInPin,
-        ArbitraryInPin,
-        ArbitraryInPin,
-        ArbitraryPioPin,
-        ArbitraryPioPin,
-        ArbitraryPioPin,
-    ) {
+    fn destructure(self) -> CD32PinsTuple {
         (
             self.power, self.up, self.down, self.left, self.right, self.latch, self.clock,
             self.data,
         )
     }
 }
-
 struct MDPins {
-    power: ArbitraryOutPin,
-    select: ArbitraryPioPin,
-    b_a: ArbitraryPioPin,
-    up_z: ArbitraryPioPin,
-    down_y: ArbitraryPioPin,
-    left_x_gnd: ArbitraryPioPin,
-    right_mode_gnd: ArbitraryPioPin,
-    c_start: ArbitraryPioPin,
+    power: Output<'static>,
+    select: embassy_rp::pio::Pin<'static, PIO0>,
+    b_a: embassy_rp::pio::Pin<'static, PIO0>,
+    up_z: embassy_rp::pio::Pin<'static, PIO0>,
+    down_y: embassy_rp::pio::Pin<'static, PIO0>,
+    left_x_gnd: embassy_rp::pio::Pin<'static, PIO0>,
+    right_mode_gnd: embassy_rp::pio::Pin<'static, PIO0>,
+    c_start: embassy_rp::pio::Pin<'static, PIO0>,
 }
 
+type MDPinsTuple = (
+    Output<'static>,
+    embassy_rp::pio::Pin<'static, PIO0>,
+    embassy_rp::pio::Pin<'static, PIO0>,
+    embassy_rp::pio::Pin<'static, PIO0>,
+    embassy_rp::pio::Pin<'static, PIO0>,
+    embassy_rp::pio::Pin<'static, PIO0>,
+    embassy_rp::pio::Pin<'static, PIO0>,
+    embassy_rp::pio::Pin<'static, PIO0>,
+);
+
 impl MDPins {
-    fn destructure(
-        self,
-    ) -> (
-        ArbitraryOutPin,
-        ArbitraryPioPin,
-        ArbitraryPioPin,
-        ArbitraryPioPin,
-        ArbitraryPioPin,
-        ArbitraryPioPin,
-        ArbitraryPioPin,
-        ArbitraryPioPin,
-    ) {
+    fn destructure(self) -> MDPinsTuple {
         (
             self.power,
             self.select,
@@ -1150,4 +781,38 @@ impl MDPins {
             self.c_start,
         )
     }
+}
+
+#[allow(dead_code)]
+struct Pins {
+    pin0: Peri<'static, embassy_rp::peripherals::PIN_0>,
+    pin1: Peri<'static, embassy_rp::peripherals::PIN_1>,
+    pin2: Peri<'static, embassy_rp::peripherals::PIN_2>,
+    pin3: Peri<'static, embassy_rp::peripherals::PIN_3>,
+    pin4: Peri<'static, embassy_rp::peripherals::PIN_4>,
+    pin5: Peri<'static, embassy_rp::peripherals::PIN_5>,
+    pin6: Peri<'static, embassy_rp::peripherals::PIN_6>,
+    pin7: Peri<'static, embassy_rp::peripherals::PIN_7>,
+    pin8: Peri<'static, embassy_rp::peripherals::PIN_8>,
+    pin9: Peri<'static, embassy_rp::peripherals::PIN_9>,
+    pin10: Peri<'static, embassy_rp::peripherals::PIN_10>,
+    pin11: Peri<'static, embassy_rp::peripherals::PIN_11>,
+    pin12: Peri<'static, embassy_rp::peripherals::PIN_12>,
+    pin13: Peri<'static, embassy_rp::peripherals::PIN_13>,
+    pin14: Peri<'static, embassy_rp::peripherals::PIN_14>,
+    pin15: Peri<'static, embassy_rp::peripherals::PIN_15>,
+    pin16: Peri<'static, embassy_rp::peripherals::PIN_16>,
+    pin17: Peri<'static, embassy_rp::peripherals::PIN_17>,
+    pin18: Peri<'static, embassy_rp::peripherals::PIN_18>,
+    pin19: Peri<'static, embassy_rp::peripherals::PIN_19>,
+    pin20: Peri<'static, embassy_rp::peripherals::PIN_20>,
+    pin21: Peri<'static, embassy_rp::peripherals::PIN_21>,
+    pin22: Peri<'static, embassy_rp::peripherals::PIN_22>,
+    pin23: Peri<'static, embassy_rp::peripherals::PIN_23>,
+    pin24: Peri<'static, embassy_rp::peripherals::PIN_24>,
+    pin25: Peri<'static, embassy_rp::peripherals::PIN_25>,
+    pin26: Peri<'static, embassy_rp::peripherals::PIN_26>,
+    pin27: Peri<'static, embassy_rp::peripherals::PIN_27>,
+    pin28: Peri<'static, embassy_rp::peripherals::PIN_28>,
+    pin29: Peri<'static, embassy_rp::peripherals::PIN_29>,
 }

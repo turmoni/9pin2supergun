@@ -7,19 +7,19 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
-embedded-hal = { version = "1.0.0" }
-pio = "0.2"
-pio-proc = "0.2"
 
 defmt = "1.0"
 defmt-rtt = "1.1"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
-
-# If you're not going to use a Board Support Package you'll need these:
-rp2040-hal = { version="0.11", features=["defmt", "rt", "critical-section-impl"] }
-rp2040-boot2 = "0.3"
 panic-halt = "1.0.0"
-ws2812-pio = "0.9.0"
+# This will *not* work with 0.9.0, see https://github.com/embassy-rs/embassy/pull/5147
+embassy-rp = { version = "0.8.0", features = ["rp2040", "critical-section-impl", "time-driver"] }
+embassy-executor = { version = "0.9.1", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
+embassy-time = "0.5.0"
+embassy-embedded-hal = "0.5.0"
+fixed-macro = "1.2.0"
+fixed = "1.30.0"
+critical-section = "1.2.0"
 smart-leds = "0.4.0"
 
 [features]
