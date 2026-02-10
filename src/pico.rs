@@ -2,8 +2,6 @@
 
 use crate::FifteenPinOutput;
 use crate::Pins;
-use defmt::*;
-use defmt_rtt as _;
 use embassy_rp::Peri;
 
 pub type OutputStart = Peri<'static, embassy_rp::peripherals::PIN_11>;
